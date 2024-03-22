@@ -1657,6 +1657,63 @@ EXPORT_SYMBOL_GPL(dev_pm_genpd_resume);
 
 #endif /* CONFIG_PM_SLEEP */
 
+#ifdef GENPD_ALLOW_WRITE_DEBUGFS
+/*
+ * This can be dangerous, therefore don't provide any real compile time
+ * configuration option for this feature.
+ * People who want to use this will need to modify the source code directly.
+ */
+static int genpd_state_set(void *data, u64 val)
+{
+
+	struct generic_pm_domain *genpd = data;
+	int ret = 0;
+
+	ret = genpd_lock_interruptible(genpd);
+	if (ret)
+		return -ERESTARTSYS;
+
+	if(val == 1) {
+		genpd->power_on(genpd);
+		genpd->status = GENPD_STATE_ON;
+	}
+	else if( val == 0) {
+		genpd->power_off(genpd);
+		genpd->status = GENPD_STATE_OFF;
+	}
+
+	genpd_unlock(genpd);
+	return 0;
+}
+
+#define pd_state_mode	0644
+
+static int genpd_state_get(void *data, u64 *val)
+{
+
+	struct generic_pm_domain *genpd = data;
+	int ret = 0;
+
+	ret = genpd_lock_interruptible(genpd);
+	if (ret)
+		return -ERESTARTSYS;
+
+	if(genpd->status == GENPD_STATE_OFF) {
+		*val = 0;
+	}
+	else {
+		*val = 1;
+	}
+
+	genpd_unlock(genpd);
+	return ret;
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(pd_state_fops, genpd_state_get,
+			 genpd_state_set, "%llu\n");
+
+#endif /* CONFIG_DEBUG_FS */
+
 static struct generic_pm_domain_data *genpd_alloc_dev_data(struct device *dev,
 							   bool has_governor)
 {
@@ -3519,6 +3576,11 @@ static void genpd_debug_add(struct generic_pm_domain *genpd)
 	if (genpd->set_performance_state)
 		debugfs_create_file("perf_state", 0444,
 				    d, genpd, &perf_state_fops);
+#ifdef GENPD_ALLOW_WRITE_DEBUGFS
+	debugfs_create_file("pd_state", 0644, d, genpd,
+			    &pd_state_fops);
+#endif /* CONFIG_DEBUG_FS */
+
 }
 
 static int __init genpd_debug_init(void)
@@ -3532,6 +3594,24 @@ static int __init genpd_debug_init(void)
 
 	list_for_each_entry(genpd, &gpd_list, gpd_list_node)
 		genpd_debug_add(genpd);
+
+#ifdef GENPD_ALLOW_WRITE_DEBUGFS
+	pr_warn("\n");
+	pr_warn("********************************************************************\n");
+	pr_warn("**     NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE           **\n");
+	pr_warn("**                                                                **\n");
+	pr_warn("**  WRITEABLE power domain state DebugFS SUPPORT HAS BEEN ENABLED **\n");
+	pr_warn("**  IN THIS KERNEL                                                **\n");
+	pr_warn("** This means that this kernel is built to expose pd operations   **\n");
+	pr_warn("** such as enabling, disabling, etc.                              **\n");
+	pr_warn("** to userspace, which may compromise security on your system.    **\n");
+	pr_warn("**                                                                **\n");
+	pr_warn("** If you see this message and you are not debugging the          **\n");
+	pr_warn("** kernel, report this immediately to your vendor!                **\n");
+	pr_warn("**                                                                **\n");
+	pr_warn("**     NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE           **\n");
+	pr_warn("********************************************************************\n");
+#endif /* CONFIG_DEBUG_FS */
 
 	return 0;
 }
