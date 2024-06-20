@@ -888,6 +888,8 @@ static int cqspi_phy_calibrate(struct cqspi_flash_pdata *f_pdata,
 
 	ret = 0;
 	f_pdata->phy_setting.read_delay = searchpoint.read_delay;
+	f_pdata->phy_setting.rx = searchpoint.rx;
+	f_pdata->phy_setting.tx = searchpoint.tx;
 out:
 	if (ret)
 		f_pdata->use_phy = false;
@@ -2748,6 +2750,12 @@ static void cqspi_remove(struct platform_device *pdev)
 	pm_runtime_disable(&pdev->dev);
 }
 
+static void __maybe_unused cqspi_restore_context(struct cqspi_st *cqspi)
+{
+	cqspi_phy_apply_setting(cqspi->f_pdata,
+				&cqspi->f_pdata->phy_setting);
+}
+
 static int cqspi_runtime_suspend(struct device *dev)
 {
 	struct cqspi_st *cqspi = dev_get_drvdata(dev);
@@ -2794,6 +2802,12 @@ static int cqspi_resume(struct device *dev)
 		dev_err(dev, "pm_runtime_force_resume failed on resume\n");
 		return ret;
 	}
+
+	/*
+	 * Only restore context if PHY is enabled, or else skip this step
+	 */
+	if (cqspi->f_pdata->use_phy)
+		cqspi_restore_context(cqspi);
 
 	return spi_controller_resume(cqspi->host);
 }
