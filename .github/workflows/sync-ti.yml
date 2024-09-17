@@ -1,0 +1,36 @@
+name: Sync TI branches
+
+on:
+  workflow_dispatch:
+  push:
+  schedule:
+    - cron: "0 * * * *"
+
+jobs:
+  sync_branches:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        branch:
+          - ti-linux-6.1.y
+          - ti-linux-6.1.y-cicd
+          - ti-linux-6.6.y
+          - ti-linux-6.6.y-cicd
+          - ti-rt-linux-6.1.y
+          - ti-rt-linux-6.1.y-cicd
+          - ti-rt-linux-6.6.y
+          - ti-rt-linux-6.6.y-cicd
+        upstream:
+          - https://git.ti.com/git/ti-linux-kernel/ti-linux-kernel.git
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Sync ${{ matrix.branch }}
+        run: |
+          git remote add upstream ${{ matrix.upstream }}
+          git fetch upstream ${{ matrix.branch }}
+          git checkout ${{ matrix.branch }}
+          git pull --unshallow
+          git merge upstream/${{ matrix.branch }} --no-edit
+          git push origin ${{ matrix.branch }}
+

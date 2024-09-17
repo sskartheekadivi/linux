@@ -1,0 +1,29 @@
+name: Sync master branch
+
+on:
+  workflow_dispatch:
+  push:
+  schedule:
+    - cron: "0 * * * *"
+
+jobs:
+  sync_branches:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        branch:
+          - master
+        upstream:
+          - https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Sync ${{ matrix.branch }}
+        run: |
+          git remote add upstream ${{ matrix.upstream }}
+          git fetch upstream ${{ matrix.branch }}
+          git checkout ${{ matrix.branch }}
+          git pull --unshallow
+          git merge upstream/${{ matrix.branch }} --no-edit
+          git push origin ${{ matrix.branch }}
+
