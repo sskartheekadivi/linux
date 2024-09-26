@@ -23,6 +23,7 @@
 #include <linux/cpu.h>
 #include <linux/debugfs.h>
 
+#define GENPD_ALLOW_WRITE_DEBUGFS
 #define GENPD_RETRY_MAX_MS	250		/* Approximate */
 
 #define GENPD_DEV_CALLBACK(genpd, type, callback, dev)		\
