@@ -19,5 +19,14 @@
 			reg = <0x14 0x4>;
 		};
 	};
+
+	pinmux: pinctrl@4084000 {
+		bootph-all;
+		compatible = "pinctrl-single";
+		reg = <0x00 0x4084000 0x00 0x8000>;
+		#pinctrl-cells = <1>;
+		pinctrl-single,register-width = <32>;
+		pinctrl-single,function-mask = <0xffffffff>;
+	};
 };
 

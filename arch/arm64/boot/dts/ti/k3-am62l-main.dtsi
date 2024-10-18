@@ -54,6 +54,32 @@
 		status = "disabled";
 	};
 
+	fss: bus@fc00000 {
+		compatible = "simple-bus";
+		reg = <0x00 0x0fc00000 0x00 0x70000>;
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		ospi0: spi@fc40000 {
+			compatible = "cdns,qspi-nor";
+			reg = <0x00 0x0fc40000 0x00 0x100>,
+			      <0x05 0x00000000 0x01 0x00000000>;
+			interrupts = <GIC_SPI 139 IRQ_TYPE_LEVEL_HIGH>;
+			cdns,fifo-depth = <256>;
+			cdns,fifo-width = <4>;
+			cdns,trigger-address = <0x0>;
+			power-domains = <&scmi_pds 32>;
+			clocks = <&scmi_clk 134>; // DEV_FSS0_OSPI_0_OSPI_RCLK_CLK
+			assigned-clocks = <&scmi_clk 134>; // DEV_FSS0_OSPI_0_OSPI_RCLK_CLK
+	// assigned-clock-parents = <&scmi_clk 136>; // AM62LX_DEV_FSS0_OSPI0_RCLK_CLK_PARENT_POSTDIV4_16FF_MAIN_0_HSDIVOUT7_CLK
+			assigned-clock-rates = <166666666>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "disabled";
+		};
+	};
+
 	sdhci1: mmc@fa00000 {
 		compatible = "ti,am62-sdhci";
 		reg = <0x00 0x0fa00000 0x00 0x1000>, <0x00 0x0fa08000 0x00 0x400>;
