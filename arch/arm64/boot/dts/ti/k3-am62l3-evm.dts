@@ -39,7 +39,7 @@
 			bootph-all;
 		};
 
-		secure_ddr: optee@0x80100000 {
+		secure_ddr: optee@80100000 {
 			reg = <0x00 0x80200000 0x00 0x800000>;
 			no-map;
 		};
