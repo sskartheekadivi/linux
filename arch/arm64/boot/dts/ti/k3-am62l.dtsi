@@ -36,14 +36,14 @@
 			#size-cells = <0>;
 
 			scmi_clk: protocol@14 {
-				status = "disabled";
+				status = "okay";
 				reg = <0x14>;
 				#clock-cells = <1>;
 				bootph-all;
 			};
 
 			scmi_pds: protocol@11 {
-				status = "disabled";
+				status = "okay";
 				reg = <0x11>;
 				#power-domain-cells = <1>;
 				bootph-all;
