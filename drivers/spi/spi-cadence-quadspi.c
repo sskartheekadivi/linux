@@ -3075,6 +3075,8 @@ static void cqspi_remove(struct platform_device *pdev)
 
 static void __maybe_unused cqspi_restore_context(struct cqspi_st *cqspi)
 {
+	cqspi_phy_set_dll_master(cqspi);
+
 	cqspi_phy_apply_setting(cqspi->f_pdata,
 				&cqspi->f_pdata->phy_setting);
 }
@@ -3097,6 +3099,12 @@ static int cqspi_runtime_resume(struct device *dev)
 	cqspi_controller_enable(cqspi, 0);
 	cqspi_controller_init(cqspi);
 	cqspi_controller_enable(cqspi, 1);
+
+	/*
+	 * Only restore context if PHY is enabled, or else skip this step
+	 */
+	if (cqspi->f_pdata->use_phy)
+		cqspi_restore_context(cqspi);
 
 	cqspi->current_cs = -1;
 	cqspi->sclk = 0;
@@ -3125,12 +3133,6 @@ static int cqspi_resume(struct device *dev)
 		dev_err(dev, "pm_runtime_force_resume failed on resume\n");
 		return ret;
 	}
-
-	/*
-	 * Only restore context if PHY is enabled, or else skip this step
-	 */
-	if (cqspi->f_pdata->use_phy)
-		cqspi_restore_context(cqspi);
 
 	return spi_controller_resume(cqspi->host);
 }
