@@ -24,6 +24,7 @@ properties:
     enum:
       - ti,am625-dss
       - ti,am62a7,dss
+      - ti,am62l,dss
       - ti,am65x-dss
 
   reg:
@@ -91,6 +92,7 @@ properties:
           For AM625 DSS, the internal DPI output port node from video
           port 1.
           For AM62A7 DSS, the port is tied off inside the SoC.
+          For AM62lite DSS, the DPI or DSI output port node from video port 1.
 
       port@1:
         $ref: /schemas/graph.yaml#/properties/port
@@ -123,6 +125,16 @@ allOf:
         ports:
           properties:
             port@0: false
+  - if:
+      properties:
+        compatible:
+          contains:
+            const: ti,am62l-dss
+    then:
+      properties:
+        ports:
+          properties:
+            port@1: false
 
 required:
   - compatible
