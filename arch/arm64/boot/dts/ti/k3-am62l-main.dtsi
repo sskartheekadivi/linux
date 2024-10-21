@@ -124,17 +124,6 @@
 		status = "disabled";
 	};
 
-	sdhci1: mmc@fa00000 {
-		compatible = "ti,am62-sdhci";
-		reg = <0x00 0x0fa00000 0x00 0x1000>, <0x00 0x0fa08000 0x00 0x400>;
-		interrupts = <GIC_SPI 237 IRQ_TYPE_LEVEL_HIGH>;
-		bus-width = <4>;
-		ti,clkbuf-sel = <0x7>;
-		ti,otap-del-sel-legacy = <0x0>;
-		ti,itap-del-sel-legacy = <0x0>;
-		status = "disabled";
-	};
-
 	dss: dss@30200000 {
 		compatible = "ti,am62l-dss";
 		reg = <0x00 0x30200000 0x00 0x1000>, /* common */
@@ -179,6 +168,53 @@
 		interrupts = <GIC_SPI 57 IRQ_TYPE_LEVEL_HIGH>;
 		phys = <&dphy_tx0>;
 		phy-names = "dphy";
+		status = "disabled";
+	};
+
+	sdhci0: mmc@fa10000 {
+		compatible = "ti,am62-sdhci";
+		reg = <0x00 0xfa10000 0x00 0x1000>, <0x00 0xfa18000 0x00 0x400>;
+		interrupts = <GIC_SPI 239 IRQ_TYPE_LEVEL_HIGH>;
+		power-domains = <&scmi_pds 28>;
+		clocks = <&scmi_clk 122>, <&scmi_clk 123>;
+		clock-names = "clk_ahb", "clk_xin";
+		assigned-clocks = <&scmi_clk 123>;
+		assigned-clock-parents = <&scmi_clk 0>;
+		bus-width = <8>;
+		mmc-ddr-1_8v;
+		mmc-hs200-1_8v;
+		ti,clkbuf-sel = <0x7>;
+		ti,otap-del-sel-legacy = <0x0>;
+		ti,otap-del-sel-mmc-hs = <0x0>;
+		ti,otap-del-sel-ddr52 = <0x5>;
+		ti,otap-del-sel-hs200 = <0x5>;
+		ti,itap-del-sel-legacy = <0x0>;
+		ti,itap-del-sel-mmc-hs = <0x1>;
+		status = "disabled";
+	};
+
+	sdhci1: mmc@fa00000 {
+		compatible = "ti,am62-sdhci";
+		reg = <0x00 0x0fa00000 0x00 0x1000>, <0x00 0x0fa08000 0x00 0x400>;
+		interrupts = <GIC_SPI 237 IRQ_TYPE_LEVEL_HIGH>;
+		power-domains = <&scmi_pds 26>;
+		clocks = <&scmi_clk 106>, <&scmi_clk 107>;
+		clock-names = "clk_ahb", "clk_xin";
+		assigned-clocks = <&scmi_clk 107>;
+		assigned-clock-parents = <&scmi_clk 0>;
+		bus-width = <4>;
+		ti,clkbuf-sel = <0x7>;
+		ti,otap-del-sel-legacy = <0x8>;
+		ti,otap-del-sel-sd-hs = <0x0>;
+		ti,otap-del-sel-sdr12 = <0x0>;
+		ti,otap-del-sel-sdr25 = <0x0>;
+		ti,otap-del-sel-sdr50 = <0x8>;
+		ti,otap-del-sel-ddr50 = <0x4>;
+		ti,otap-del-sel-sdr104 = <0x7>;
+		ti,itap-del-sel-legacy = <0xa>;
+		ti,itap-del-sel-sd-hs = <0x1>;
+		ti,itap-del-sel-sdr12 = <0xa>;
+		ti,itap-del-sel-sdr25 = <0x1>;
 		status = "disabled";
 	};
 };
