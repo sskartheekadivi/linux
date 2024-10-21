@@ -156,6 +156,22 @@
 			AM62PX_IOPAD(0x0234, PIN_INPUT, 0) /* (B6) MMC1_SDCD */
 		>;
 	};
+
+	main_mcan0_pins_default: main-mcan0-pins-default {
+		bootph-all;
+		pinctrl-single,pins = <
+			AM62PX_IOPAD(0x01c8, PIN_INPUT, 0) /* (B15) MCAN0_RX */
+			AM62PX_IOPAD(0x01c4, PIN_OUTPUT, 0) /* (B16) MCAN0_TX */
+		>;
+	};
+
+	main_mcan2_pins_default: main-mcan2-pins-default {
+		bootph-all;
+		pinctrl-single,pins = <
+			AM62PX_IOPAD(0x01bc, PIN_INPUT, 6) /* (B14) UART0_CTSn.MCAN2_RX */
+			AM62PX_IOPAD(0x01c0, PIN_OUTPUT, 6) /* (B13) UART0_RTSn.MCAN2_TX */
+		>;
+	};
 };
 
 &main_uart0 {
@@ -366,4 +382,16 @@
 			};
 		};
 	};
+};
+
+&main_mcan0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&main_mcan0_pins_default>;
+	status = "okay";
+};
+
+&main_mcan2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&main_mcan2_pins_default>;
+	status = "okay";
 };
