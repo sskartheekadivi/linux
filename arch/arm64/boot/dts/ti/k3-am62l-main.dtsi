@@ -62,18 +62,17 @@
 		ranges;
 
 		ospi0: spi@fc40000 {
-			compatible = "cdns,qspi-nor";
+			compatible = "ti,am654-ospi", "cdns,qspi-nor";
 			reg = <0x00 0x0fc40000 0x00 0x100>,
 			      <0x05 0x00000000 0x01 0x00000000>;
 			interrupts = <GIC_SPI 240 IRQ_TYPE_LEVEL_HIGH>;
 			cdns,fifo-depth = <256>;
 			cdns,fifo-width = <4>;
 			cdns,trigger-address = <0x0>;
-			power-domains = <&scmi_pds 32>;
-			clocks = <&scmi_clk 134>; // DEV_FSS0_OSPI_0_OSPI_RCLK_CLK
-			assigned-clocks = <&scmi_clk 134>; // DEV_FSS0_OSPI_0_OSPI_RCLK_CLK
-	// assigned-clock-parents = <&scmi_clk 136>; // AM62LX_DEV_FSS0_OSPI0_RCLK_CLK_PARENT_POSTDIV4_16FF_MAIN_0_HSDIVOUT7_CLK
+			clocks = <&scmi_clk 134>;
+			assigned-clocks = <&scmi_clk 134>;
 			assigned-clock-rates = <166666666>;
+			power-domains = <&scmi_pds 32>;
 			#address-cells = <1>;
 			#size-cells = <0>;
 			status = "disabled";
