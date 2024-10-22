@@ -28,5 +28,25 @@
 		pinctrl-single,register-width = <32>;
 		pinctrl-single,function-mask = <0xffffffff>;
 	};
+
+	wkup_gpio0: gpio@4201000 {
+		compatible = "ti,am64-gpio", "ti,keystone-gpio";
+		reg = <0x00 0x04201000 0x00 0x100>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		interrupt-parent = <&gic500>;
+		interrupts = <GIC_SPI 276 IRQ_TYPE_EDGE_RISING>, <GIC_SPI 704 IRQ_TYPE_EDGE_RISING>,
+			     <GIC_SPI 705 IRQ_TYPE_EDGE_RISING>, <GIC_SPI 706 IRQ_TYPE_EDGE_RISING>,
+			     <GIC_SPI 707 IRQ_TYPE_EDGE_RISING>, <GIC_SPI 708 IRQ_TYPE_EDGE_RISING>,
+			     <GIC_SPI 709 IRQ_TYPE_EDGE_RISING>, <GIC_SPI 710 IRQ_TYPE_EDGE_RISING>;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		ti,ngpio = <7>;
+		ti,davinci-gpio-unbanked = <0>;
+		power-domains = <&scmi_pds 36>;
+		clocks = <&scmi_clk 142>;
+		clock-names = "gpio";
+		status = "disabled";
+	};
 };
 

@@ -6,6 +6,8 @@
 
 /dts-v1/;
 
+#include <dt-bindings/leds/common.h>
+#include <dt-bindings/gpio/gpio.h>
 #include "k3-am62l3.dtsi"
 
 / {
@@ -55,6 +57,20 @@
 			hdmi_connector_in: endpoint {
 				remote-endpoint = <&sii9022_out>;
 			};
+		};
+	};
+
+	leds {
+		compatible = "gpio-leds";
+		pinctrl-names = "default";
+		pinctrl-0 = <&usr_led_pins_default>;
+
+		led-0 {
+			label = "am62-sk:green:heartbeat";
+			gpios = <&main_gpio0 123 GPIO_ACTIVE_HIGH>;
+			linux,default-trigger = "heartbeat";
+			function = LED_FUNCTION_HEARTBEAT;
+			default-state = "on";
 		};
 	};
 };
@@ -170,6 +186,12 @@
 		pinctrl-single,pins = <
 			AM62PX_IOPAD(0x01bc, PIN_INPUT, 6) /* (B14) UART0_CTSn.MCAN2_RX */
 			AM62PX_IOPAD(0x01c0, PIN_OUTPUT, 6) /* (B13) UART0_RTSn.MCAN2_TX */
+		>;
+	};
+
+	usr_led_pins_default: usr-led-pins-default {
+		pinctrl-single,pins = <
+			AM62PX_IOPAD(0x0238, PIN_OUTPUT, 7) /* (D24) MMC1_SDWP.GPIO0_123 */
 		>;
 	};
 };
@@ -293,6 +315,11 @@
 };
 
 &main_gpio0 {
+	status = "okay";
+	bootph-all;
+};
+
+&main_gpio2 {
 	status = "okay";
 	bootph-all;
 };
