@@ -33,6 +33,7 @@ dtb-$(CONFIG_ARCH_K3) += k3-am62a7-phyboard-lyra-rdk.dtb
 
 # Boards with AM62Lx SoC
 dtb-$(CONFIG_ARCH_K3) += k3-am62l3-evm.dtb
+dtb-$(CONFIG_ARCH_K3) += k3-am62l3-evm-dsi-rpi-7inch-panel.dtbo
 
 # Boards with AM62Px SoC
 dtb-$(CONFIG_ARCH_K3) += k3-am62p5-sk.dtb
@@ -208,6 +209,8 @@ k3-j784s4-evm-quad-port-eth-exp1-dtbs := k3-j784s4-evm.dtb \
 	k3-j784s4-evm-quad-port-eth-exp1.dtbo
 k3-j784s4-evm-usxgmii-exp1-exp2-dtbs := k3-j784s4-evm.dtb \
 	k3-j784s4-evm-usxgmii-exp1-exp2.dtbo
+k3-am62l3-evm-dsi-rpi-7inch-panel-dtbs := k3-am62l3-evm.dtb \
+	k3-am62l3-evm-dsi-rpi-7inch-panel.dtbo
 dtb- += k3-am625-beagleplay-csi2-ov5640.dtb \
 	k3-am625-beagleplay-csi2-tevi-ov5640.dtb \
 	k3-am625-sk-csi2-imx219.dtb \
@@ -234,13 +237,15 @@ dtb- += k3-am625-beagleplay-csi2-ov5640.dtb \
 	k3-j721s2-evm-pcie1-ep.dtb \
 	k3-j784s4-evm-pcie0-pcie1-ep.dtb \
 	k3-j784s4-evm-quad-port-eth-exp1.dtb \
-	k3-j784s4-evm-usxgmii-exp1-exp2.dtb
+	k3-j784s4-evm-usxgmii-exp1-exp2.dtb \
+	k3-am62l3-evm-dsi-rpi-7inch-panel.dtb
 
 # Enable support for device-tree overlays
 DTC_FLAGS_k3-am625-beagleplay += -@
 DTC_FLAGS_k3-am625-phyboard-lyra-rdk += -@
 DTC_FLAGS_k3-am62a7-phyboard-lyra-rdk += -@
 DTC_FLAGS_k3-am625-sk += -@
+DTC_FLAGS_k3-am62l3-evm += -@
 DTC_FLAGS_k3-am62-lp-sk += -@
 DTC_FLAGS_k3-am62a7-sk += -@
 DTC_FLAGS_k3-am62p5-sk += -@
