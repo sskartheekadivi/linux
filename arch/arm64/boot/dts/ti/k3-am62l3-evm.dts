@@ -203,6 +203,8 @@
 	usr_led_pins_default: usr-led-pins-default {
 		pinctrl-single,pins = <
 			AM62PX_IOPAD(0x0238, PIN_OUTPUT, 7) /* (D24) MMC1_SDWP.GPIO0_123 */
+		>;
+	};
 
 	main_i2c2_pins_default: main-i2c2-default-pins {
 		pinctrl-single,pins = <
@@ -210,6 +212,7 @@
 			AM62PX_IOPAD(0x01e0, PIN_INPUT_PULLUP, 0) /* (D8) I2C2_SDA */
 		>;
 	};
+
 	main_usb1_pins_default: main-usb1-default-pins {
 		pinctrl-single,pins = <
 			AM62PX_IOPAD(0x0248, PIN_OUTPUT, 0) /* (A5) USB1_DRVVBUS */
@@ -552,8 +555,8 @@
 
 	port {
 		usb0_hs_ep: endpoint {
-		    remote-endpoint = <&usb_con_hs>;
-	       };
+			remote-endpoint = <&usb_con_hs>;
+		};
 	};
 };
 
