@@ -18,6 +18,16 @@
 			compatible = "ti,am654-chipid";
 			reg = <0x14 0x4>;
 		};
+
+		usb0_phy_ctrl: syscon@4000 {
+			compatible = "ti,am62-usb-phy-ctrl", "syscon";
+			reg = <0x4000 0x4>;
+		};
+
+		usb1_phy_ctrl: syscon@4004 {
+			compatible = "ti,am62-usb-phy-ctrl", "syscon";
+			reg = <0x4004 0x4>;
+		};
 	};
 
 	pinmux: pinctrl@4084000 {
