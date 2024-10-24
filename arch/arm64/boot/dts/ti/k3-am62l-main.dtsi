@@ -461,4 +461,34 @@
 		clock-names = "tbclk", "fck";
 		status = "disabled";
 	};
+
+	ecap0: pwm@23100000 {
+		compatible = "ti,am3352-ecap";
+		#pwm-cells = <3>;
+		reg = <0x00 0x23100000 0x00 0x100>;
+		power-domains = <&scmi_pds 23>;
+		clocks = <&scmi_clk 99>;
+		clock-names = "fck";
+		status = "disabled";
+	};
+
+	ecap1: pwm@23110000 {
+		compatible = "ti,am3352-ecap";
+		#pwm-cells = <3>;
+		reg = <0x00 0x23110000 0x00 0x100>;
+		power-domains = <&scmi_pds 24>;
+		clocks = <&scmi_clk 100>;
+		clock-names = "fck";
+		status = "disabled";
+	};
+
+	ecap2: pwm@23120000 {
+		compatible = "ti,am3352-ecap";
+		#pwm-cells = <3>;
+		reg = <0x00 0x23120000 0x00 0x100>;
+		power-domains = <&scmi_pds 25>;
+		clocks = <&scmi_clk 101>;
+		clock-names = "fck";
+		status = "disabled";
+	};
 };

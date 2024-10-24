@@ -33,6 +33,24 @@
 			AM62PX_IOPAD(0x00c8, PIN_OUTPUT, 4) /* (M19) GPMC0_WEn.EHRPWM2_B */
 		>;
 	};
+
+	main_ecap0_pins_default: main-ecap0-default-pins {
+		pinctrl-single,pins = <
+			AM62PX_IOPAD(0x0078, PIN_OUTPUT, 5) /* (L22) GPMC0_AD0.ECAP0_IN_APWM_OUT */
+		>;
+	};
+
+	main_ecap1_pins_default: main_ecap1-default-pins {
+		pinctrl-single,pins = <
+			AM62PX_IOPAD(0x007c, PIN_OUTPUT, 5) /* (L23) GPMC0_AD1.ECAP1_IN_APWM_OUT */
+		>;
+	};
+
+	main_ecap2_pins_default: main-ecap2-default-pins {
+		pinctrl-single,pins = <
+			AM62PX_IOPAD(0x009c, PIN_OUTPUT, 5) /* (H20) GPMC0_AD9.ECAP2_IN_APWM_OUT */
+		>;
+	};
 };
 
 &main_i2c1 {
@@ -65,5 +83,29 @@
 &epwm2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&main_epwm2_pins_default>;
+	status = "okay";
+};
+
+&ecap0 {
+	/* ECAP0 in APWM mode */
+	/* Pin 24 on J2 */
+	pinctrl-names = "default";
+	pinctrl-0 = <&main_ecap0_pins_default>;
+	status = "okay";
+};
+
+&ecap1 {
+	/* ECAP1 in APWM mode */
+	/* Pin 26 on J2 */
+	pinctrl-names = "default";
+	pinctrl-0 = <&main_ecap1_pins_default>;
+	status = "okay";
+};
+
+&ecap2 {
+	/* ECAP2 in APWM mode */
+	/* Pin 9 on J3 */
+	pinctrl-names = "default";
+	pinctrl-0 = <&main_ecap2_pins_default>;
 	status = "okay";
 };
