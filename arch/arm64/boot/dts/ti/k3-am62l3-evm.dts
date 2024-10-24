@@ -641,3 +641,11 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&main_usb1_pins_default>;
 };
+
+&tscadc0 {
+	status = "okay";
+
+	adc {
+		ti,adc-channels = <0 1 2 3>;
+	};
+};
