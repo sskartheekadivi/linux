@@ -70,5 +70,13 @@
 		clock-names = "fck";
 		status = "disabled";
 	};
+
+	wkup_vtm0: temperature-sensor@b00000 {
+		compatible = "ti,j7200-vtm";
+		reg = <0x00 0xb00000 0x00 0x400>,
+		      <0x00 0xb01000 0x00 0x400>;
+		power-domains = <&scmi_pds 46>;
+		#thermal-sensor-cells = <1>;
+	};
 };
 
