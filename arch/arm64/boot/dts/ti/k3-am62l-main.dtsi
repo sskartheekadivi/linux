@@ -491,4 +491,31 @@
 		clock-names = "fck";
 		status = "disabled";
 	};
+
+	eqep0: counter@23200000 {
+		compatible = "ti,am62-eqep";
+		reg = <0x00 0x23200000 0x00 0x100>;
+		power-domains = <&scmi_pds 29>;
+		clocks = <&scmi_clk 127>;
+		interrupts = <GIC_SPI 162 IRQ_TYPE_EDGE_RISING>;
+		status = "disabled";
+	};
+
+	eqep1: counter@23210000 {
+		compatible = "ti,am62-eqep";
+		reg = <0x00 0x23210000 0x00 0x100>;
+		power-domains = <&scmi_pds 30>;
+		clocks = <&scmi_clk 128>;
+		interrupts = <GIC_SPI 163 IRQ_TYPE_EDGE_RISING>;
+		status = "disabled";
+	};
+
+	eqep2: counter@23220000 {
+		compatible = "ti,am62-eqep";
+		reg = <0x00 0x23220000 0x00 0x100>;
+		power-domains = <&scmi_pds 31>;
+		clocks = <&scmi_clk 129>;
+		interrupts = <GIC_SPI 164 IRQ_TYPE_EDGE_RISING>;
+		status = "disabled";
+	};
 };
