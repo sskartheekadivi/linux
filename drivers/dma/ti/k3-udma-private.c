@@ -159,25 +159,32 @@ void xudma_##res##rt_write(struct udma_##res *p, int reg, u32 val)	\
 EXPORT_SYMBOL(xudma_##res##rt_write)
 XUDMA_RT_IO_FUNCTIONS(tchan);
 XUDMA_RT_IO_FUNCTIONS(rchan);
+XUDMA_RT_IO_FUNCTIONS(rflow);
 
 int xudma_is_pktdma(struct udma_dev *ud)
 {
-	return ud->match_data->type == DMA_TYPE_PKTDMA;
+	return (ud->match_data->type == DMA_TYPE_PKTDMA || ud->match_data->type == DMA_TYPE_PKTDMA_V2);
 }
 EXPORT_SYMBOL(xudma_is_pktdma);
 
 int xudma_pktdma_tflow_get_irq(struct udma_dev *ud, int udma_tflow_id)
 {
-	const struct udma_oes_offsets *oes = &ud->soc_data->oes;
-
-	return msi_get_virq(ud->dev, udma_tflow_id + oes->pktdma_tchan_flow);
+	if (ud->match_data->type == DMA_TYPE_PKTDMA_V2) {
+		return ud->ring_irqs[udma_tflow_id % 64];
+	} else {
+		const struct udma_oes_offsets *oes = &ud->soc_data->oes;
+		return msi_get_virq(ud->dev, udma_tflow_id + oes->pktdma_tchan_flow);
+	}
 }
 EXPORT_SYMBOL(xudma_pktdma_tflow_get_irq);
 
 int xudma_pktdma_rflow_get_irq(struct udma_dev *ud, int udma_rflow_id)
 {
-	const struct udma_oes_offsets *oes = &ud->soc_data->oes;
-
-	return msi_get_virq(ud->dev, udma_rflow_id + oes->pktdma_rchan_flow);
+	if (ud->match_data->type == DMA_TYPE_PKTDMA_V2) {
+		return ud->ring_irqs[16];
+	} else {
+		const struct udma_oes_offsets *oes = &ud->soc_data->oes;
+		return msi_get_virq(ud->dev, udma_rflow_id + oes->pktdma_rchan_flow);
+	}
 }
 EXPORT_SYMBOL(xudma_pktdma_rflow_get_irq);

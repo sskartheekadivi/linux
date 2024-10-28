@@ -20,8 +20,11 @@
 
 /* BCHANRT/TCHANRT/RCHANRT registers */
 #define UDMA_CHAN_RT_CTL_REG		0x0
+#define	UDMA_CHAN_RT_CFG_REG		0x4
 #define UDMA_CHAN_RT_SWTRIG_REG		0x8
 #define UDMA_CHAN_RT_STDATA_REG		0x80
+
+#define UDMA_RX_FLOWRT_RFA		0x8
 
 #define UDMA_CHAN_RT_PEER_REG(i)	(0x200 + ((i) * 0x4))
 #define UDMA_CHAN_RT_PEER_STATIC_TR_XY_REG	\
@@ -38,7 +41,7 @@
 #define UDMA_CHAN_RT_SBCNT_REG		0x410
 
 /* UDMA_CAP Registers */
-#define UDMA_CAP2_TCHAN_CNT(val)	((val) & 0x1ff)
+#define UDMA_CAP2_TCHAN_CNT(val)	((val >> 9) & 0x1ff)
 #define UDMA_CAP2_ECHAN_CNT(val)	(((val) >> 9) & 0x1ff)
 #define UDMA_CAP2_RCHAN_CNT(val)	(((val) >> 18) & 0x1ff)
 #define UDMA_CAP3_RFLOW_CNT(val)	((val) & 0x3fff)
@@ -55,14 +58,26 @@
 #define BCDMA_CAP4_HTCHAN_CNT(val)	(((val) >> 16) & 0xff)
 #define BCDMA_CAP4_UTCHAN_CNT(val)	(((val) >> 24) & 0xff)
 
-#define PKTDMA_CAP4_TFLOW_CNT(val)	((val) & 0x3fff)
+#define PKTDMA_CAP4_TFLOW_CNT(val)	((val >> 16) & 0x3fff)
+#define PKTDMA_CAP4_RFLOW_CNT(val)	((val) & 0x3fff)
 
 /* UDMA_CHAN_RT_CTL_REG */
 #define UDMA_CHAN_RT_CTL_EN		BIT(31)
 #define UDMA_CHAN_RT_CTL_TDOWN		BIT(30)
 #define UDMA_CHAN_RT_CTL_PAUSE		BIT(29)
 #define UDMA_CHAN_RT_CTL_FTDOWN		BIT(28)
+#define UDMA_CHAN_RT_CTL_AUTOPAIR      BIT(23)
+#define UDMA_CHAN_RT_CTL_PAIR_TIMEOUT  BIT(17)
+#define UDMA_CHAN_RT_CTL_PAIR_COMPLETE BIT(16)
 #define UDMA_CHAN_RT_CTL_ERROR		BIT(0)
+
+/* UDMA_CHAN_RT_CFG_REG */
+#define UDMA_CHAN_RT_CFG_PAUSE_ON_ERR		BIT(31)
+#define UDMA_CHAN_RT_CFG_RX_IGNORE_LONG		BIT(14)
+#define UDMA_CHAN_RT_CFG_BURST_SIZE_MASK	GENMASK(11, 10)
+#define UDMA_CHAN_RT_CFG_BURST_SIZE_SHIFT	(10)
+#define UDMA_CHAN_RT_CFG_TD_TYPE		BIT(9)
+#define UDMA_CHAN_RT_CFG_NOTDPKT		BIT(8)
 
 /* UDMA_CHAN_RT_PEER_RT_EN_REG */
 #define UDMA_PEER_RT_EN_ENABLE		BIT(31)
@@ -153,6 +168,8 @@ u32 xudma_tchanrt_read(struct udma_tchan *tchan, int reg);
 void xudma_tchanrt_write(struct udma_tchan *tchan, int reg, u32 val);
 u32 xudma_rchanrt_read(struct udma_rchan *rchan, int reg);
 void xudma_rchanrt_write(struct udma_rchan *rchan, int reg, u32 val);
+u32 xudma_rflowrt_read(struct udma_rflow *rflow, int reg);
+void xudma_rflowrt_write(struct udma_rflow *rflow, int reg, u32 val);
 bool xudma_rflow_is_gp(struct udma_dev *ud, int id);
 int xudma_get_rflow_ring_offset(struct udma_dev *ud);
 
