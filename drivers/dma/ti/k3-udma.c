@@ -978,7 +978,7 @@ static int udma_start(struct udma_chan *uc)
 		udma_rchanrt_update_bits(uc, UDMA_CHAN_RT_CTL_REG,
 				   UDMA_CHAN_RT_CTL_EN, UDMA_CHAN_RT_CTL_EN);
 
-		if ((uc->ud->match_data->type != DMA_TYPE_BCDMA_V2) || (uc->ud->match_data->type != DMA_TYPE_PKTDMA_V2)) {
+		if ((uc->ud->match_data->type != DMA_TYPE_BCDMA_V2) && (uc->ud->match_data->type != DMA_TYPE_PKTDMA_V2)) {
 			/* Enable remote */
 			udma_rchanrt_write(uc, UDMA_CHAN_RT_PEER_RT_EN_REG,
 					UDMA_PEER_RT_EN_ENABLE);
@@ -1005,7 +1005,7 @@ static int udma_start(struct udma_chan *uc)
 			       sizeof(uc->static_tr));
 		}
 
-		if ((uc->ud->match_data->type != DMA_TYPE_BCDMA_V2) || (uc->ud->match_data->type != DMA_TYPE_PKTDMA_V2)) {
+		if ((uc->ud->match_data->type != DMA_TYPE_BCDMA_V2) && (uc->ud->match_data->type != DMA_TYPE_PKTDMA_V2)) {
 			/* Enable remote */
 			udma_tchanrt_write(uc, UDMA_CHAN_RT_PEER_RT_EN_REG,
 					   UDMA_PEER_RT_EN_ENABLE);
