@@ -65,15 +65,16 @@ struct k3_ring_cfg_regs {
 
 #define K3_RINGACC_RT_INT_REGS_OFS		0x140
 #define K3_RINGACC_RT_INT_ENABLE_SET_COMPLETE	BIT(0)
+#define K3_RINGACC_RT_INT_ENABLE_SET_TR			BIT(2)
 
 struct k3_ring_intr_regs {
 	u32	enable_set;
-	u32	resv_4[1];
+	u32	resv_4;
 	u32	clr;
-	u32	resv_16[4];
+	u32	resv_16;
+	u32	status_set;
+	u32	resv_8;
 	u32	status;
-	u32	resv_8[2];
-	u32	status_mskd;
 };
 
 #define K3_RINGACC_RT_REGS_STEP			0x1000
@@ -733,6 +734,23 @@ int k3_ringacc_get_ring_irq_num(struct k3_ring *ring)
 }
 EXPORT_SYMBOL_GPL(k3_ringacc_get_ring_irq_num);
 
+u32 k3_ringacc_ring_get_irq_status(struct k3_ring *ring)
+{
+	struct k3_ringacc *ringacc = ring->parent;
+	struct k3_ring *ring2 = &ringacc->rings[ring->ring_id];
+	return readl(&ring2->intr->status);
+}
+EXPORT_SYMBOL_GPL(k3_ringacc_ring_get_irq_status);
+
+void k3_ringacc_ring_clear_irq(struct k3_ring *ring)
+{
+	struct k3_ringacc *ringacc = ring->parent;
+	struct k3_ring *ring2 = &ringacc->rings[ring->ring_id];
+
+	writel(0xFF, &ring2->intr->status);
+}
+EXPORT_SYMBOL_GPL(k3_ringacc_ring_clear_irq);
+
 static int k3_ringacc_ring_cfg_sci(struct k3_ring *ring)
 {
 	struct ti_sci_msg_rm_ring_cfg ring_cfg = { 0 };
@@ -761,7 +779,7 @@ static int k3_ringacc_ring_cfg_sci(struct k3_ring *ring)
 		reg |= ring_cfg.count & K3_DMARING_CFG_SIZE_MASK;
 
 		writel(reg, &ring->cfg->size);
-		writel(K3_RINGACC_RT_INT_ENABLE_SET_COMPLETE, &ring->intr->enable_set);
+		writel(K3_RINGACC_RT_INT_ENABLE_SET_COMPLETE | K3_RINGACC_RT_INT_ENABLE_SET_TR, &ring->intr->enable_set);
 		return 0;
 	} else {
 		ret = ringacc->tisci_ring_ops->set_cfg(ringacc->tisci, &ring_cfg);

@@ -775,12 +775,14 @@ static void udma_reset_rings(struct udma_chan *uc)
 		break;
 	}
 
-	if (ring1)
-		k3_ringacc_ring_reset_dma(ring1,
-					  k3_ringacc_ring_get_occ(ring1));
-	if (ring2)
-		k3_ringacc_ring_reset(ring2);
-
+	if ((uc->ud->match_data->type != DMA_TYPE_BCDMA_V2) &&
+		(uc->ud->match_data->type != DMA_TYPE_PKTDMA_V2)) {
+		if (ring1)
+			k3_ringacc_ring_reset_dma(ring1,
+					k3_ringacc_ring_get_occ(ring1));
+		if (ring2)
+			k3_ringacc_ring_reset(ring2);
+	}
 	/* make sure we are not leaking memory by stalled descriptor */
 	if (uc->terminated_desc) {
 		udma_desc_free(&uc->terminated_desc->vd);
@@ -842,12 +844,10 @@ static int udma_reset_chan(struct udma_chan *uc, bool hard)
 {
 	switch (uc->config.dir) {
 	case DMA_DEV_TO_MEM:
-		udma_rchanrt_write(uc, UDMA_CHAN_RT_PEER_RT_EN_REG, 0);
-		udma_rchanrt_write(uc, UDMA_CHAN_RT_CTL_REG, UDMA_CHAN_RT_CTL_AUTOPAIR);
+		udma_rchanrt_write(uc, UDMA_CHAN_RT_CTL_REG, 0);
 		break;
 	case DMA_MEM_TO_DEV:
-		udma_tchanrt_write(uc, UDMA_CHAN_RT_CTL_REG, UDMA_CHAN_RT_CTL_AUTOPAIR);
-		udma_tchanrt_write(uc, UDMA_CHAN_RT_PEER_RT_EN_REG, 0);
+		udma_tchanrt_write(uc, UDMA_CHAN_RT_CTL_REG, 0);
 		break;
 	case DMA_MEM_TO_MEM:
 		udma_rchanrt_write(uc, UDMA_CHAN_RT_CTL_REG, 0);
@@ -962,11 +962,11 @@ static int udma_start(struct udma_chan *uc)
 				val |= PDMA_STATIC_TR_XY_BURST;
 
 			udma_rchanrt_write(uc,
-					   UDMA_CHAN_RT_PEER_STATIC_TR_XY_REG,
+					   0x800,
 					   val);
 
 			udma_rchanrt_write(uc,
-				UDMA_CHAN_RT_PEER_STATIC_TR_Z_REG,
+				0x804,
 				PDMA_STATIC_TR_Z(uc->desc->static_tr.bstcnt,
 						 match_data->statictr_z_mask));
 
@@ -975,13 +975,15 @@ static int udma_start(struct udma_chan *uc)
 			       sizeof(uc->static_tr));
 		}
 
-		udma_rchanrt_update_bits(uc, UDMA_CHAN_RT_CTL_REG,
-				   UDMA_CHAN_RT_CTL_EN, UDMA_CHAN_RT_CTL_EN);
-
 		if ((uc->ud->match_data->type != DMA_TYPE_BCDMA_V2) && (uc->ud->match_data->type != DMA_TYPE_PKTDMA_V2)) {
+			udma_rchanrt_update_bits(uc, UDMA_CHAN_RT_CTL_REG,
+				UDMA_CHAN_RT_CTL_EN, UDMA_CHAN_RT_CTL_EN);
 			/* Enable remote */
 			udma_rchanrt_write(uc, UDMA_CHAN_RT_PEER_RT_EN_REG,
-					UDMA_PEER_RT_EN_ENABLE);
+				UDMA_PEER_RT_EN_ENABLE);
+		} else {
+			udma_rchanrt_write(uc, UDMA_CHAN_RT_CTL_REG,
+				UDMA_CHAN_RT_CTL_EN | UDMA_CHAN_RT_CTL_AUTOPAIR);
 		}
 
 		break;
@@ -997,7 +999,7 @@ static int udma_start(struct udma_chan *uc)
 				val |= PDMA_STATIC_TR_XY_BURST;
 
 			udma_tchanrt_write(uc,
-					   UDMA_CHAN_RT_PEER_STATIC_TR_XY_REG,
+					   0x800,
 					   val);
 
 			/* save the current staticTR configuration */
@@ -1009,10 +1011,12 @@ static int udma_start(struct udma_chan *uc)
 			/* Enable remote */
 			udma_tchanrt_write(uc, UDMA_CHAN_RT_PEER_RT_EN_REG,
 					   UDMA_PEER_RT_EN_ENABLE);
+			udma_tchanrt_update_bits(uc, UDMA_CHAN_RT_CTL_REG,
+				UDMA_CHAN_RT_CTL_EN, UDMA_CHAN_RT_CTL_EN);
+		} else {
+			udma_tchanrt_write(uc, UDMA_CHAN_RT_CTL_REG,
+				UDMA_CHAN_RT_CTL_EN | UDMA_CHAN_RT_CTL_AUTOPAIR);
 		}
-
-		udma_tchanrt_update_bits(uc, UDMA_CHAN_RT_CTL_REG,
-				   UDMA_CHAN_RT_CTL_EN, UDMA_CHAN_RT_CTL_EN);
 
 		break;
 	case DMA_MEM_TO_MEM:
@@ -1036,6 +1040,7 @@ static int udma_stop(struct udma_chan *uc)
 {
 	enum udma_chan_state old_state = uc->state;
 
+	return 0;
 	uc->state = UDMA_CHAN_IS_TERMINATING;
 	reinit_completion(&uc->teardown_completed);
 
@@ -1178,11 +1183,71 @@ static void udma_check_tx_completion(struct work_struct *work)
 	}
 }
 
+static irqreturn_t udma_udma_irq_handler(int irq, void *data)
+{
+	struct udma_chan *uc = data;
+	struct udma_desc *d;
+
+	// clear TR status
+
+	switch (uc->config.dir) {
+	case DMA_DEV_TO_MEM:
+		k3_ringacc_ring_clear_irq(uc->rflow->r_ring);
+		break;
+	case DMA_MEM_TO_DEV:
+	case DMA_MEM_TO_MEM:
+		k3_ringacc_ring_clear_irq(uc->tchan->tc_ring);
+		break;
+	default:
+		return -ENOENT;
+	}
+
+	spin_lock(&uc->vc.lock);
+	d = uc->desc;
+	if (d) {
+		d->tr_idx = (d->tr_idx + 1) % d->sglen;
+
+		if (uc->cyclic) {
+			vchan_cyclic_callback(&d->vd);
+		} else {
+			/* TODO: figure out the real amount of data */
+			udma_decrement_byte_counters(uc, d->residue);
+			udma_start(uc);
+			vchan_cookie_complete(&d->vd);
+		}
+	}
+
+	spin_unlock(&uc->vc.lock);
+
+	return IRQ_HANDLED;
+}
+
 static irqreturn_t udma_ring_irq_handler(int irq, void *data)
 {
 	struct udma_chan *uc = data;
 	struct udma_desc *d;
 	dma_addr_t paddr = 0;
+	u32 intr_status;
+
+	// Check the TR bit
+	// call udma_udma_irq_handler if TR is set
+
+	switch (uc->config.dir) {
+	case DMA_DEV_TO_MEM:
+		intr_status =  k3_ringacc_ring_get_irq_status(uc->rflow->r_ring);
+		break;
+	case DMA_MEM_TO_DEV:
+	case DMA_MEM_TO_MEM:
+		intr_status =  k3_ringacc_ring_get_irq_status(uc->tchan->tc_ring);
+		break;
+	default:
+		return -ENOENT;
+	}
+
+
+	if (intr_status & BIT(2)) {
+		return udma_udma_irq_handler(irq, data);
+	}
 
 	if (udma_pop_from_ring(uc, &paddr) || !paddr)
 		return IRQ_HANDLED;
@@ -1238,31 +1303,6 @@ static irqreturn_t udma_ring_irq_handler(int irq, void *data)
 		}
 	}
 out:
-	spin_unlock(&uc->vc.lock);
-
-	return IRQ_HANDLED;
-}
-
-static irqreturn_t udma_udma_irq_handler(int irq, void *data)
-{
-	struct udma_chan *uc = data;
-	struct udma_desc *d;
-
-	spin_lock(&uc->vc.lock);
-	d = uc->desc;
-	if (d) {
-		d->tr_idx = (d->tr_idx + 1) % d->sglen;
-
-		if (uc->cyclic) {
-			vchan_cyclic_callback(&d->vd);
-		} else {
-			/* TODO: figure out the real amount of data */
-			udma_decrement_byte_counters(uc, d->residue);
-			udma_start(uc);
-			vchan_cookie_complete(&d->vd);
-		}
-	}
-
 	spin_unlock(&uc->vc.lock);
 
 	return IRQ_HANDLED;
@@ -1418,7 +1458,7 @@ static int bcdma_get_bchan(struct udma_chan *uc)
 	else
 		tpl = ud->bchan_tpl.levels - 1;
 
-	uc->bchan = __udma_reserve_bchan(ud, tpl, -1);
+	uc->bchan = __udma_reserve_bchan(ud, tpl, uc->id);
 	if (IS_ERR(uc->bchan)) {
 		ret = PTR_ERR(uc->bchan);
 		uc->bchan = NULL;
@@ -1658,7 +1698,7 @@ static int bcdma_alloc_bchan_resources(struct udma_chan *uc)
 		return ret;
 
 	if (ud->match_data->type == DMA_TYPE_BCDMA_V2) {
-		ret = k3_ringacc_request_rings_pair(ud->ringacc, 128 + uc->bchan->id, -1,
+		ret = k3_ringacc_request_rings_pair(ud->ringacc, 128 + uc->id, -1,
 				&uc->bchan->t_ring,
 				&uc->bchan->tc_ring);
 	} else {
@@ -1667,7 +1707,6 @@ static int bcdma_alloc_bchan_resources(struct udma_chan *uc)
 				&uc->bchan->tc_ring);
 	}
 	if (ret) {
-		pr_err("%s: Failed ring pair %d\n", __func__, ret);
 		ret = -EBUSY;
 		goto err_ring;
 	}
@@ -1827,7 +1866,6 @@ static int udma_alloc_rx_resources(struct udma_chan *uc)
 			fd_ring_id = ud->bchan_cnt + ud->tchan_cnt + ud->echan_cnt +
 				uc->rchan->id;
 	}
-	printk("%s:%d: rchan->id = %d\n", __func__, __LINE__, fd_ring_id);
 	ret = k3_ringacc_request_rings_pair(ud->ringacc, fd_ring_id, -1,
 					    &rflow->fd_ring, &rflow->r_ring);
 	if (ret) {
@@ -2503,7 +2541,7 @@ static int bcdma_alloc_chan_resources(struct dma_chan *chan)
 
 		irq_udma_idx = uc->bchan->id + oes->bcdma_bchan_data;
 		if (ud->match_data->type == DMA_TYPE_BCDMA_V2) {
-			irq_ring_idx = 33 + uc->bchan->id;
+			irq_ring_idx = 33 + uc->id;
 			ret = bcdma_direct_m2m_channel_config(uc);
 		}
 		else {
@@ -2603,17 +2641,7 @@ static int bcdma_alloc_chan_resources(struct dma_chan *chan)
 
 		uc->use_dma_pool = true;
 	} else if (uc->config.dir != DMA_MEM_TO_MEM) {
-		if (ud->match_data->type == DMA_TYPE_BCDMA_V2) {
-			if (uc->config.dir == DMA_DEV_TO_MEM)
-				udma_rchanrt_update_bits(uc, UDMA_CHAN_RT_CTL_REG,
-						UDMA_CHAN_RT_CTL_AUTOPAIR,
-						UDMA_CHAN_RT_CTL_AUTOPAIR);
-			else if (uc->config.dir == DMA_MEM_TO_DEV)
-				udma_tchanrt_update_bits(uc, UDMA_CHAN_RT_CTL_REG,
-						UDMA_CHAN_RT_CTL_AUTOPAIR,
-						UDMA_CHAN_RT_CTL_AUTOPAIR);
-		}
-		else {
+		if (ud->match_data->type != DMA_TYPE_BCDMA_V2) {
 			/* PSI-L pairing */
 			ret = navss_psil_pair(ud, uc->config.src_thread,
 					uc->config.dst_thread);
@@ -2664,15 +2692,17 @@ static int bcdma_alloc_chan_resources(struct dma_chan *chan)
 				ret = -EINVAL;
 				goto err_irq_free;
 			}
-		}
 
-		ret = request_irq(uc->irq_num_udma, udma_udma_irq_handler, 0,
-				  uc->name, uc);
-		if (ret) {
-			dev_err(ud->dev, "chan%d: BCDMA irq request failed\n",
-				uc->id);
-			free_irq(uc->irq_num_ring, uc);
-			goto err_irq_free;
+			ret = request_irq(uc->irq_num_udma, udma_udma_irq_handler, 0,
+					uc->name, uc);
+			if (ret) {
+				dev_err(ud->dev, "chan%d: BCDMA irq request failed\n",
+						uc->id);
+				free_irq(uc->irq_num_ring, uc);
+				goto err_irq_free;
+			}
+		} else {
+			uc->irq_num_udma = 0;
 		}
 	}
 	udma_reset_rings(uc);
@@ -3326,26 +3356,39 @@ static int udma_configure_statictr(struct udma_chan *uc, struct udma_desc *d,
 
 	d->static_tr.elcnt = elcnt;
 
-	/*
-	 * PDMA must to close the packet when the channel is in packet mode.
-	 * For TR mode when the channel is not cyclic we also need PDMA to close
-	 * the packet otherwise the transfer will stall because PDMA holds on
-	 * the data it has received from the peripheral.
-	 */
 	if (uc->config.pkt_mode || !uc->cyclic) {
+		/*
+		 * PDMA must close the packet when the channel is in packet mode.
+		 * For TR mode when the channel is not cyclic we also need PDMA
+		 * to close the packet otherwise the transfer will stall because
+		 * PDMA holds on the data it has received from the peripheral.
+		 */
 		unsigned int div = dev_width * elcnt;
 
 		if (uc->cyclic)
 			d->static_tr.bstcnt = d->residue / d->sglen / div;
 		else
 			d->static_tr.bstcnt = d->residue / div;
+	} else if (uc->ud->match_data->type == DMA_TYPE_BCDMA &&
+		   uc->config.dir == DMA_DEV_TO_MEM &&
+		   uc->cyclic) {
+		/*
+		 * For cyclic mode with BCDMA we have to set EOP in each TR to
+		 * prevent short packet errors seen on channel teardown. So the
+		 * PDMA must close the packet after every TR transfer by setting
+		 * burst count equal to the number of bytes transferred.
+		 */
+		struct cppi5_tr_type1_t *tr_req = d->hwdesc[0].tr_req_base;
 
-		if (uc->config.dir == DMA_DEV_TO_MEM &&
-		    d->static_tr.bstcnt > uc->ud->match_data->statictr_z_mask)
-			return -EINVAL;
+		d->static_tr.bstcnt =
+			(tr_req->icnt0 * tr_req->icnt1) / dev_width;
 	} else {
 		d->static_tr.bstcnt = 0;
 	}
+
+	if (uc->config.dir == DMA_DEV_TO_MEM &&
+		d->static_tr.bstcnt > uc->ud->match_data->statictr_z_mask)
+		return -EINVAL;
 
 	return 0;
 }
@@ -3591,8 +3634,10 @@ udma_prep_slave_sg(struct dma_chan *chan, struct scatterlist *sgl,
 	/* static TR for remote PDMA */
 	if (udma_configure_statictr(uc, d, dev_width, burst)) {
 		dev_err(uc->ud->dev,
-			"%s: StaticTR Z is limited to maximum 4095 (%u)\n",
-			__func__, d->static_tr.bstcnt);
+			"%s: StaticTR Z is limited to maximum %u (%u)\n",
+			__func__, uc->ud->match_data->statictr_z_mask,
+			d->static_tr.bstcnt);
+
 
 		udma_free_hwdesc(uc, d);
 		kfree(d);
@@ -3617,6 +3662,7 @@ udma_prep_dma_cyclic_tr(struct udma_chan *uc, dma_addr_t buf_addr,
 	u16 tr0_cnt0, tr0_cnt1, tr1_cnt0;
 	unsigned int i;
 	int num_tr;
+	u32 period_csf = 0;
 
 	num_tr = udma_get_tr_counters(period_len, __ffs(buf_addr), &tr0_cnt0,
 				      &tr0_cnt1, &tr1_cnt0);
@@ -3638,6 +3684,20 @@ udma_prep_dma_cyclic_tr(struct udma_chan *uc, dma_addr_t buf_addr,
 	else
 		period_addr = buf_addr |
 			((u64)uc->config.asel << K3_ADDRESS_ASEL_SHIFT);
+
+	/*
+	 * For BCDMA <-> PDMA transfers, the EOP flag needs to be set on the
+	 * last TR of a descriptor, to mark the packet as complete.
+	 * This is required for getting the teardown completion message in case
+	 * of TX, and to avoid short-packet error in case of RX.
+	 *
+	 * As we are in cyclic mode, we do not know which period might be the
+	 * last one, so set the flag for each period.
+	 */
+	if (uc->config.ep_type == PSIL_EP_PDMA_XY &&
+	    uc->ud->match_data->type == DMA_TYPE_BCDMA) {
+		period_csf = CPPI5_TR_CSF_EOP;
+	}
 
 	for (i = 0; i < periods; i++) {
 		int tr_idx = i * num_tr;
@@ -3666,8 +3726,10 @@ udma_prep_dma_cyclic_tr(struct udma_chan *uc, dma_addr_t buf_addr,
 		}
 
 		if (!(flags & DMA_PREP_INTERRUPT))
-			cppi5_tr_csf_set(&tr_req[tr_idx].flags,
-					 CPPI5_TR_CSF_SUPR_EVT);
+			period_csf |= CPPI5_TR_CSF_SUPR_EVT;
+
+		if (period_csf)
+			cppi5_tr_csf_set(&tr_req[tr_idx].flags, period_csf);
 
 		period_addr += period_len;
 	}
@@ -3796,8 +3858,9 @@ udma_prep_dma_cyclic(struct dma_chan *chan, dma_addr_t buf_addr, size_t buf_len,
 	/* static TR for remote PDMA */
 	if (udma_configure_statictr(uc, d, dev_width, burst)) {
 		dev_err(uc->ud->dev,
-			"%s: StaticTR Z is limited to maximum 4095 (%u)\n",
-			__func__, d->static_tr.bstcnt);
+			"%s: StaticTR Z is limited to maximum %u (%u)\n",
+			__func__, uc->ud->match_data->statictr_z_mask,
+			d->static_tr.bstcnt);
 
 		udma_free_hwdesc(uc, d);
 		kfree(d);
@@ -4322,21 +4385,26 @@ static bool udma_dma_filter_fn(struct dma_chan *chan, void *param)
 		ucc->default_flow_id = -1;
 	}
 
-	if (ucc->ep_type != PSIL_EP_NATIVE) {
-		const struct udma_match_data *match_data = ud->match_data;
-
-		if (match_data->flags & UDMA_FLAG_PDMA_ACC32)
-			ucc->enable_acc32 = ep_config->pdma_acc32;
-		if (match_data->flags & UDMA_FLAG_PDMA_BURST)
-			ucc->enable_burst = ep_config->pdma_burst;
-	}
-
 	ucc->needs_epib = ep_config->needs_epib;
 	ucc->psd_size = ep_config->psd_size;
 	ucc->metadata_size =
-			(ucc->needs_epib ? CPPI5_INFO0_HDESC_EPIB_SIZE : 0) +
-			ucc->psd_size;
+		(ucc->needs_epib ? CPPI5_INFO0_HDESC_EPIB_SIZE : 0) +
+		ucc->psd_size;
+	ucc->irq_idx = ep_config->irq_idx;
 
+    if (ucc->ep_type != PSIL_EP_NATIVE) {
+		const struct udma_match_data *match_data = ud->match_data;
+
+		if ((match_data->flags & UDMA_FLAG_PDMA_ACC32) && (ep_config->pdma_acc32))
+			ucc->enable_acc32 = true;
+		else
+			ucc->enable_acc32 = false;
+
+		if ((match_data->flags & UDMA_FLAG_PDMA_BURST) && (ep_config->pdma_burst))
+			ucc->enable_burst = true;
+		else
+			ucc->enable_burst = false;
+    }
 	if (ucc->pkt_mode)
 		ucc->hdesc_size = ALIGN(sizeof(struct cppi5_host_desc_t) +
 				 ucc->metadata_size, ud->desc_align);
@@ -4361,7 +4429,8 @@ static struct dma_chan *udma_of_xlate(struct of_phandle_args *dma_spec,
 	struct udma_filter_param filter_param;
 	struct dma_chan *chan;
 
-	if (ud->match_data->type == DMA_TYPE_BCDMA) {
+	if ((ud->match_data->type == DMA_TYPE_BCDMA) ||
+		(ud->match_data->type == DMA_TYPE_BCDMA_V2)) {
 		if (dma_spec->args_count != 3)
 			return NULL;
 
@@ -4667,12 +4736,17 @@ static int udma_get_mmrs(struct platform_device *pdev, struct udma_dev *ud)
 		ud->rchan_cnt = UDMA_CAP2_RCHAN_CNT(cap2);
 		break;
 	case DMA_TYPE_BCDMA:
-	case DMA_TYPE_BCDMA_V2:
 		ud->bchan_cnt = BCDMA_CAP2_BCHAN_CNT(cap2) +
 				BCDMA_CAP3_HBCHAN_CNT(cap3) +
 				BCDMA_CAP3_UBCHAN_CNT(cap3);
 		ud->tchan_cnt = BCDMA_CAP2_TCHAN_CNT(cap2);
 		ud->rchan_cnt = BCDMA_CAP2_RCHAN_CNT(cap2);
+		ud->rflow_cnt = ud->rchan_cnt;
+		break;
+	case DMA_TYPE_BCDMA_V2:
+		ud->bchan_cnt = BCDMA_CAP2_BCHAN_CNT(cap2) +
+				BCDMA_CAP3_HBCHAN_CNT(cap3) +
+				BCDMA_CAP3_UBCHAN_CNT(cap3);
 		// hardcode tchan and rchan cnt to 64 to enable all 128 channels
 		ud->tchan_cnt = 64;
 		ud->rchan_cnt = 64;
@@ -4934,6 +5008,7 @@ static int bcdma_setup_resources(struct udma_dev *ud)
 
 	ud->bchan_map = devm_kmalloc_array(dev, BITS_TO_LONGS(ud->bchan_cnt),
 					   sizeof(unsigned long), GFP_KERNEL);
+	bitmap_zero(ud->bchan_map, ud->bchan_cnt);
 	ud->bchans = devm_kcalloc(dev, ud->bchan_cnt, sizeof(*ud->bchans),
 				  GFP_KERNEL);
 	if (ud->match_data->type == DMA_TYPE_BCDMA_V2)
@@ -4941,10 +5016,12 @@ static int bcdma_setup_resources(struct udma_dev *ud)
 				GFP_KERNEL);
 	ud->tchan_map = devm_kmalloc_array(dev, BITS_TO_LONGS(ud->tchan_cnt),
 					   sizeof(unsigned long), GFP_KERNEL);
+	bitmap_zero(ud->tchan_map, ud->tchan_cnt);
 	ud->tchans = devm_kcalloc(dev, ud->tchan_cnt, sizeof(*ud->tchans),
 				  GFP_KERNEL);
 	ud->rchan_map = devm_kmalloc_array(dev, BITS_TO_LONGS(ud->rchan_cnt),
 					   sizeof(unsigned long), GFP_KERNEL);
+	bitmap_zero(ud->rchan_map, ud->rchan_cnt);
 	ud->rchans = devm_kcalloc(dev, ud->rchan_cnt, sizeof(*ud->rchans),
 				  GFP_KERNEL);
 	/* BCDMA do not really have flows, but the driver expect it */
@@ -5602,6 +5679,8 @@ static int udma_probe(struct platform_device *pdev)
 			dev_err(dev, "Invalid atype: %u\n", ud->atype);
 			return -EINVAL;
 		}
+
+		ud->ringacc = of_k3_ringacc_get_by_phandle(dev->of_node, "ti,ringacc");
 	} else {
 		ret = of_property_read_u32(dev->of_node, "ti,asel",
 					   &ud->asel);
@@ -5609,24 +5688,25 @@ static int udma_probe(struct platform_device *pdev)
 			dev_err(dev, "Invalid asel: %u\n", ud->asel);
 			return -EINVAL;
 		}
-	}
 
-	if (ud->match_data->type == DMA_TYPE_UDMA) {
-		ud->ringacc = of_k3_ringacc_get_by_phandle(dev->of_node, "ti,ringacc");
-	} else {
 		struct k3_ringacc_init_data ring_init_data = {0};
 
-		ring_init_data.tisci = ud->tisci_rm.tisci;
-		ring_init_data.tisci_dev_id = ud->tisci_rm.tisci_dev_id;
+		if ((ud->match_data->type != DMA_TYPE_BCDMA_V2) &&
+			(ud->match_data->type != DMA_TYPE_PKTDMA_V2)) {
+			ring_init_data.tisci = ud->tisci_rm.tisci;
+			ring_init_data.tisci_dev_id = ud->tisci_rm.tisci_dev_id;
+		}
 		if (ud->match_data->type == DMA_TYPE_BCDMA) {
 			ring_init_data.num_rings = ud->bchan_cnt +
-						   ud->tchan_cnt +
-						   ud->rchan_cnt;
-		} else if (ud->match_data->type ==DMA_TYPE_PKTDMA) {
+				ud->tchan_cnt +
+				ud->rchan_cnt;
+		} else if (ud->match_data->type == DMA_TYPE_BCDMA_V2) {
+			ring_init_data.num_rings = 143;
+		} else if (ud->match_data->type == DMA_TYPE_PKTDMA) {
 			ring_init_data.num_rings = ud->rflow_cnt +
-						   ud->tflow_cnt;
-		} else {
-			ring_init_data.num_rings = 144;
+				ud->tflow_cnt;
+		} else if (ud->match_data->type == DMA_TYPE_PKTDMA_V2) {
+			ring_init_data.num_rings = 113;
 
 			ud->rflow_rt = devm_platform_ioremap_resource_byname(pdev, "ringrt");
 			ring_init_data.base_rt = ud->rflow_rt;
@@ -5743,7 +5823,11 @@ static int udma_probe(struct platform_device *pdev)
 		struct udma_rchan *rchan = &ud->rchans[i];
 
 		rchan->id = i;
-		rchan->reg_rt = ud->mmrs[MMR_TCHANRT] + i * 0x1000;
+		if ((ud->match_data->type == DMA_TYPE_BCDMA_V2) ||
+			(ud->match_data->type == DMA_TYPE_PKTDMA_V2))
+			rchan->reg_rt = ud->mmrs[MMR_TCHANRT] + i * 0x1000;
+		else
+			rchan->reg_rt = ud->mmrs[MMR_RCHANRT] + i * 0x1000;
 	}
 
 	for (i = 0; i < ud->rflow_cnt; i++) {

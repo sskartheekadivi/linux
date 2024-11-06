@@ -11,6 +11,7 @@
 struct psil_ep {
 	u32 thread_id;
 	struct psil_endpoint_config ep_config;
+	u32 irq_idx;
 };
 
 /**

@@ -59,6 +59,7 @@ enum psil_endpoint_type {
  *			use flow_id == chan_id
  * @default_flow_id:	PKDMA default (r)flow index of mapped channel.
  *			Must be within the flow range of the mapped channel.
+ * @irq_idx:	IRQ index from devicetree.
  */
 struct psil_endpoint_config {
 	enum psil_endpoint_type ep_type;

@@ -15,6 +15,7 @@
 			.mapped_channel_id = ch,		\
 			.pkt_mode = 0,				\
 			.irq_idx = irq,		\
+			.default_flow_id = -1	\
 		},						\
 	}
 
@@ -151,7 +152,6 @@ static struct psil_ep am62l_dst_ep_map[] = {
 	PSIL_PDMA_XY_PKT(0x4701, 66, 31),
 	/* PDMA_MAIN0 - CRC32 - CH0-1 */
 	PSIL_PDMA_XY_PKT(0xC702, 67, 32),
-	/* CPSW3G */
 	PSIL_PDMA_XY_PKT(0xC702, 68, 32),
 	/* CPSW3G */
 	PSIL_ETHERNET(0xc600, 64, 64, 2),
