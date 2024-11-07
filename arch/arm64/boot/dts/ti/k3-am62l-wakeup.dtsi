@@ -4,6 +4,8 @@
  * Copyright (C) 2024 Texas Instruments Incorporated - https://www.ti.com/
  */
 
+#include <dt-bindings/bus/ti-sysc.h>
+
 &cbass_wakeup {
 	wkup_conf: bus@43000000 {
 		bootph-all;
@@ -82,6 +84,41 @@
 		      <0x00 0xb01000 0x00 0x400>;
 		power-domains = <&scmi_pds 46>;
 		#thermal-sensor-cells = <1>;
+	};
+
+	target-module@2b300050 {
+		compatible = "ti,sysc-omap2", "ti,sysc";
+		reg = <0x00 0x2b300050 0x00 0x4>,
+		      <0x00 0x2b300054 0x00 0x4>,
+		      <0x00 0x2b300058 0x00 0x4>;
+		reg-names = "rev", "sysc", "syss";
+		ti,sysc-mask = <(SYSC_OMAP2_ENAWAKEUP |
+				 SYSC_OMAP2_SOFTRESET |
+				 SYSC_OMAP2_AUTOIDLE)>;
+		ti,sysc-sidle = <SYSC_IDLE_FORCE>,
+				<SYSC_IDLE_NO>,
+				<SYSC_IDLE_SMART>,
+				<SYSC_IDLE_SMART_WKUP>;
+		ti,syss-mask = <1>;
+		ti,no-reset-on-init;
+		power-domains = <&scmi_pds 83>;
+		clocks = <&scmi_clk 324>;
+		clock-names = "fck";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges = <0x0 0x00 0x2b300000 0x100000>;
+		status = "disabled";
+
+		wkup_uart0: serial@0 {
+			compatible = "ti,am64-uart", "ti,am654-uart";
+			reg = <0x0 0x100>;
+			interrupts = <GIC_SPI 108 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&scmi_clk 324>;
+			assigned-clocks = <&scmi_clk 324>;
+			assigned-clock-rates = <48000000>;
+			clock-names = "fck";
+			status = "disabled";
+		};
 	};
 };
 
