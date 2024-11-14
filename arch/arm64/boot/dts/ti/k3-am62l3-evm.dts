@@ -926,31 +926,39 @@
 
 			partition@0 {
 				label = "NAND.tiboot3";
-				reg = <0x00000000 0x00200000>;	/* 2M */
+				reg = <0x00000000 0x00080000>;	/* 512KB */
+			};
+			partition@80000 {
+				label = "NAND.tispl";
+				reg = <0x80000 0x180000>; /* 1.5M */
 			};
 			partition@200000 {
-				label = "NAND.tispl";
+				label = "NAND.u-boot";
 				reg = <0x00200000 0x00200000>;	/* 2M */
 			};
 			partition@400000 {
-				label = "NAND.tiboot3.backup";	/* 2M */
-				reg = <0x00400000 0x00200000>;	/* BootROM looks at 4M */
+				label = "NAND.tiboot3.backup";	/* 512KB */
+				reg = <0x00400000 0x00080000>;	/* BootROM looks at 4M */
+			};
+			partition@480000 {
+				label = "NAND.tispl.bin.backup";
+				reg = <0x00480000 0x180000>; /* 1.5M */
 			};
 			partition@600000 {
-				label = "NAND.u-boot";
-				reg = <0x00600000 0x00400000>;	/* 4M */
+				label = "NAND.u-boot.backup";
+				reg = <0x00600000 0x00200000>;	/* 2M */
 			};
-			partition@a00000 {
+			partition@800000 {
 				label = "NAND.u-boot-env";
-				reg = <0x00a00000 0x00040000>;	/* 256K */
+				reg = <0x00800000 0x00040000>;	/* 256K */
 			};
-			partition@a40000 {
+			partition@840000 {
 				label = "NAND.u-boot-env.backup";
-				reg = <0x00a40000 0x00040000>;	/* 256K */
+				reg = <0x00840000 0x00040000>;	/* 256K */
 			};
-			partition@a80000 {
+			partition@880000 {
 				label = "NAND.file-system";
-				reg = <0x00a80000 0x3f580000>;
+				reg = <0x00880000 0x1f780000>;
 			};
 		};
 	};
