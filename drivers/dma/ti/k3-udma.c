@@ -2541,7 +2541,7 @@ static int bcdma_alloc_chan_resources(struct dma_chan *chan)
 
 		irq_udma_idx = uc->bchan->id + oes->bcdma_bchan_data;
 		if (ud->match_data->type == DMA_TYPE_BCDMA_V2) {
-			irq_ring_idx = 33 + uc->id;
+			irq_ring_idx = 128 + uc->id;
 			ret = bcdma_direct_m2m_channel_config(uc);
 		}
 		else {
@@ -2566,7 +2566,7 @@ static int bcdma_alloc_chan_resources(struct dma_chan *chan)
 
 		irq_udma_idx = uc->tchan->id + oes->bcdma_tchan_data;
 		if (ud->match_data->type == DMA_TYPE_BCDMA_V2) {
-			irq_ring_idx = uc->config.irq_idx;
+			irq_ring_idx = uc->config.mapped_channel_id;
 			ret = bcdma_direct_tx_channel_config(uc);
 		}
 		else {
@@ -2592,7 +2592,7 @@ static int bcdma_alloc_chan_resources(struct dma_chan *chan)
 
 		irq_udma_idx = uc->rchan->id + oes->bcdma_rchan_data;
 		if (ud->match_data->type == DMA_TYPE_BCDMA_V2) {
-			irq_ring_idx = uc->config.irq_idx;
+			irq_ring_idx = uc->config.mapped_channel_id;
 			ret = bcdma_direct_rx_channel_config(uc);
 		}
 		else {
@@ -2655,27 +2655,40 @@ static int bcdma_alloc_chan_resources(struct dma_chan *chan)
 		uc->psil_paired = true;
 	}
 
-	if (ud->match_data->type == DMA_TYPE_BCDMA_V2)
-		uc->irq_num_ring = ud->ring_irqs[irq_ring_idx];
-	else
+	if (ud->match_data->type != DMA_TYPE_BCDMA_V2) {
 		uc->irq_num_ring = msi_get_virq(ud->dev, irq_ring_idx);
 
-	if (uc->irq_num_ring <= 0) {
-		dev_err(ud->dev, "Failed to get ring irq (bchan index: %u)\n",
-				irq_ring_idx);
-		ret = -EINVAL;
-		goto err_psi_free;
-	} else {
-		dev_dbg(ud->dev, "Got ring irq %d (bchan index: %u)\n",
-				uc->irq_num_ring, uc->id);
+		if (uc->irq_num_ring <= 0) {
+			dev_err(ud->dev, "Failed to get ring irq (bchan index: %u)\n",
+					irq_ring_idx);
+			ret = -EINVAL;
+			goto err_psi_free;
+		} else {
+			dev_dbg(ud->dev, "Got ring irq %d (bchan index: %u)\n",
+					uc->irq_num_ring, uc->id);
+		}
 	}
 
-	if (ud->match_data->type == DMA_TYPE_BCDMA_V2)
+	if (ud->match_data->type == DMA_TYPE_BCDMA_V2) {
+		__be32 addr[2] = {0, 0};
+		struct of_phandle_args out_irq;
+		int ret;
+
+		out_irq.np = dev_of_node(ud->dev);
+		out_irq.args_count = 1;
+		out_irq.args[0] = irq_ring_idx;
+		ret = of_irq_parse_raw(addr, &out_irq);
+		if (ret)
+			return ret;
+
+		uc->irq_num_ring = irq_create_of_mapping(&out_irq);
+
 		ret = devm_request_irq(ud->dev, uc->irq_num_ring, udma_ring_irq_handler,
-				IRQF_ONESHOT, uc->name, uc);
-	else
+				IRQF_TRIGGER_HIGH, uc->name, uc);
+	} else {
 		ret = request_irq(uc->irq_num_ring, udma_ring_irq_handler,
 				IRQF_TRIGGER_HIGH, uc->name, uc);
+	}
 	if (ret) {
 		dev_err(ud->dev, "chan%d: ring irq request failed\n", uc->id);
 		goto err_irq_free;
@@ -2855,7 +2868,19 @@ static int pktdma_alloc_chan_resources(struct dma_chan *chan)
 	uc->psil_paired = true;
 
 	if (ud->match_data->type == DMA_TYPE_PKTDMA_V2) {
-		uc->irq_num_ring = ud->ring_irqs[irq_ring_idx];
+		__be32 addr[2] = {0, 0};
+		struct of_phandle_args out_irq;
+		int ret;
+
+		out_irq.np = dev_of_node(ud->dev);
+		out_irq.args_count = 1;
+		out_irq.args[0] = irq_ring_idx;
+		ret = of_irq_parse_raw(addr, &out_irq);
+		if (ret)
+			return ret;
+
+		uc->irq_num_ring = irq_create_of_mapping(&out_irq);
+
 		ret = devm_request_irq(ud->dev, uc->irq_num_ring, udma_ring_irq_handler,
 				IRQF_TRIGGER_HIGH, uc->name, uc);
 	} else {
@@ -4708,14 +4733,6 @@ static const struct soc_device_attribute k3_soc_devices[] = {
 	{ /* sentinel */ }
 };
 
-static void udma_get_ring_irqs(struct platform_device *pdev, struct udma_dev *ud)
-{
-	int i;
-
-	for (i = 0; i < ud->rchan_cnt + ud->tchan_cnt + ud->bchan_cnt; i++)
-		ud->ring_irqs[i] = platform_get_irq(pdev, i);
-}
-
 static int udma_get_mmrs(struct platform_device *pdev, struct udma_dev *ud)
 {
 	u32 cap2, cap3, cap4;
@@ -5789,10 +5806,6 @@ static int udma_probe(struct platform_device *pdev)
 	ch_count = setup_resources(ud);
 	if (ch_count <= 0)
 		return ch_count;
-
-	if ((ud->match_data->type == DMA_TYPE_BCDMA_V2) ||
-		(ud->match_data->type == DMA_TYPE_PKTDMA_V2))
-		udma_get_ring_irqs(pdev, ud);
 
 	spin_lock_init(&ud->lock);
 	INIT_WORK(&ud->purge_work, udma_purge_desc_work);

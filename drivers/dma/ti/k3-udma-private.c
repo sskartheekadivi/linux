@@ -3,6 +3,10 @@
  *  Copyright (C) 2019 Texas Instruments Incorporated - http://www.ti.com
  *  Author: Peter Ujfalusi <peter.ujfalusi@ti.com>
  */
+#include <linux/irq.h>
+#include <linux/irqchip.h>
+#include <linux/irqdomain.h>
+#include <linux/interrupt.h>
 #include <linux/of.h>
 #include <linux/of_platform.h>
 
@@ -170,7 +174,18 @@ EXPORT_SYMBOL(xudma_is_pktdma);
 int xudma_pktdma_tflow_get_irq(struct udma_dev *ud, int udma_tflow_id)
 {
 	if (ud->match_data->type == DMA_TYPE_PKTDMA_V2) {
-		return ud->ring_irqs[udma_tflow_id % 64];
+		__be32 addr[2] = {0, 0};
+		struct of_phandle_args out_irq;
+		int ret;
+
+		out_irq.np = dev_of_node(ud->dev);
+		out_irq.args_count = 1;
+		out_irq.args[0] = udma_tflow_id;
+		ret = of_irq_parse_raw(addr, &out_irq);
+		if (ret)
+			return ret;
+
+		return irq_create_of_mapping(&out_irq);
 	} else {
 		const struct udma_oes_offsets *oes = &ud->soc_data->oes;
 		return msi_get_virq(ud->dev, udma_tflow_id + oes->pktdma_tchan_flow);
@@ -181,7 +196,18 @@ EXPORT_SYMBOL(xudma_pktdma_tflow_get_irq);
 int xudma_pktdma_rflow_get_irq(struct udma_dev *ud, int udma_rflow_id)
 {
 	if (ud->match_data->type == DMA_TYPE_PKTDMA_V2) {
-		return ud->ring_irqs[16];
+		__be32 addr[2] = {0, 0};
+		struct of_phandle_args out_irq;
+		int ret;
+
+		out_irq.np = dev_of_node(ud->dev);
+		out_irq.args_count = 1;
+		out_irq.args[0] = udma_rflow_id;
+		ret = of_irq_parse_raw(addr, &out_irq);
+		if (ret)
+			return ret;
+
+		return irq_create_of_mapping(&out_irq);
 	} else {
 		const struct udma_oes_offsets *oes = &ud->soc_data->oes;
 		return msi_get_virq(ud->dev, udma_rflow_id + oes->pktdma_rchan_flow);
