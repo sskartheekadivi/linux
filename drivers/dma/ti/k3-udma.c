@@ -2006,30 +2006,6 @@ static int udma_tisci_m2m_channel_config(struct udma_chan *uc)
 	return ret;
 }
 
-static int bcdma_direct_m2m_channel_config(struct udma_chan *uc)
-{
-	struct udma_dev *ud = uc->ud;
-	struct udma_bchan *bchan = uc->bchan;
-	u8 burst_size = 0;
-	u32 cfg;
-	u8 tpl;
-
-	if (ud->match_data->flags & UDMA_FLAG_BURST_SIZE) {
-		tpl = udma_get_chan_tpl_index(&ud->bchan_tpl, bchan->id);
-
-		burst_size = ud->match_data->burst_size[tpl];
-	}
-
-	cfg = udma_bchanrt_read(uc, UDMA_CHAN_RT_CFG_REG);
-	pr_err("%s: read chan config %x\n", __func__, cfg);
-
-	udma_bchanrt_update_bits(
-		uc, UDMA_CHAN_RT_CFG_REG, UDMA_CHAN_RT_CFG_BURST_SIZE_MASK,
-		burst_size << UDMA_CHAN_RT_CFG_BURST_SIZE_SHIFT);
-
-	return 0;
-}
-
 static int bcdma_tisci_m2m_channel_config(struct udma_chan *uc)
 {
 	struct udma_dev *ud = uc->ud;
@@ -2214,29 +2190,6 @@ static int udma_tisci_rx_channel_config(struct udma_chan *uc)
 		dev_err(ud->dev, "flow%d config failed: %d\n", rchan->id, ret);
 
 	return 0;
-}
-
-static int bcdma_direct_rx_channel_config(struct udma_chan *uc)
-{
-    /*struct udma_dev *ud = uc->ud;*/
-    /*struct udma_rchan *rchan = uc->rchan;*/
-    u32 cfg;
-
-    cfg = udma_rchanrt_read(uc, UDMA_CHAN_RT_CFG_REG);
-
-    return 0;
-}
-
-static int bcdma_direct_tx_channel_config(struct udma_chan *uc)
-{
-    /*struct udma_dev *ud = uc->ud;*/
-    /*struct udma_rchan *rchan = uc->rchan;*/
-    u32 cfg;
-
-    cfg = udma_tchanrt_read(uc, UDMA_CHAN_RT_CFG_REG);
-    pr_err("%s: read tchan config %x\n", __func__, cfg);
-
-    return 0;
 }
 
 static int bcdma_tisci_rx_channel_config(struct udma_chan *uc)
@@ -2542,9 +2495,7 @@ static int bcdma_alloc_chan_resources(struct dma_chan *chan)
 		irq_udma_idx = uc->bchan->id + oes->bcdma_bchan_data;
 		if (ud->match_data->type == DMA_TYPE_BCDMA_V2) {
 			irq_ring_idx = 128 + uc->id;
-			ret = bcdma_direct_m2m_channel_config(uc);
-		}
-		else {
+		} else {
 			irq_ring_idx = uc->bchan->id + oes->bcdma_bchan_ring;
 			ret = bcdma_tisci_m2m_channel_config(uc);
 		}
@@ -2567,9 +2518,7 @@ static int bcdma_alloc_chan_resources(struct dma_chan *chan)
 		irq_udma_idx = uc->tchan->id + oes->bcdma_tchan_data;
 		if (ud->match_data->type == DMA_TYPE_BCDMA_V2) {
 			irq_ring_idx = uc->config.mapped_channel_id;
-			ret = bcdma_direct_tx_channel_config(uc);
-		}
-		else {
+		} else {
 			irq_ring_idx = uc->tchan->id + oes->bcdma_tchan_ring;
 			ret = bcdma_tisci_tx_channel_config(uc);
 		}
@@ -2593,9 +2542,7 @@ static int bcdma_alloc_chan_resources(struct dma_chan *chan)
 		irq_udma_idx = uc->rchan->id + oes->bcdma_rchan_data;
 		if (ud->match_data->type == DMA_TYPE_BCDMA_V2) {
 			irq_ring_idx = uc->config.mapped_channel_id;
-			ret = bcdma_direct_rx_channel_config(uc);
-		}
-		else {
+		} else {
 			irq_ring_idx = uc->rchan->id + oes->bcdma_rchan_ring;
 			ret = bcdma_tisci_rx_channel_config(uc);
 		}
@@ -4735,7 +4682,7 @@ static const struct soc_device_attribute k3_soc_devices[] = {
 
 static int udma_get_mmrs(struct platform_device *pdev, struct udma_dev *ud)
 {
-	u32 cap2, cap3, cap4;
+	u32 cap2, cap3;
 	int i;
 
 	ud->mmrs[MMR_GCFG] = devm_platform_ioremap_resource_byname(pdev, mmr_names[MMR_GCFG]);
@@ -4771,7 +4718,6 @@ static int udma_get_mmrs(struct platform_device *pdev, struct udma_dev *ud)
 		break;
 	case DMA_TYPE_PKTDMA:
 	case DMA_TYPE_PKTDMA_V2:
-		cap4 = udma_read(ud->mmrs[MMR_GCFG], 0x34);
 		ud->tchan_cnt = 79;
 		ud->rchan_cnt = 97;
 		ud->tflow_cnt = 80;
