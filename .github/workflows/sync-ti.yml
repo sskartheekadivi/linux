@@ -31,6 +31,6 @@ jobs:
           git fetch upstream ${{ matrix.branch }}
           git checkout ${{ matrix.branch }}
           git pull --unshallow
-          git merge upstream/${{ matrix.branch }} --no-edit
+          git reset --hard upstream/${{ matrix.branch }}
           git push origin ${{ matrix.branch }}
 
