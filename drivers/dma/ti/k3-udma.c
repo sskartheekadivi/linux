@@ -3359,7 +3359,7 @@ static int udma_configure_statictr(struct udma_chan *uc, struct udma_desc *d,
 	}
 
 	if (uc->config.dir == DMA_DEV_TO_MEM &&
-		d->static_tr.bstcnt > uc->ud->match_data->statictr_z_mask)
+	    d->static_tr.bstcnt > uc->ud->match_data->statictr_z_mask)
 		return -EINVAL;
 
 	return 0;
@@ -3609,7 +3609,6 @@ udma_prep_slave_sg(struct dma_chan *chan, struct scatterlist *sgl,
 			"%s: StaticTR Z is limited to maximum %u (%u)\n",
 			__func__, uc->ud->match_data->statictr_z_mask,
 			d->static_tr.bstcnt);
-
 
 		udma_free_hwdesc(uc, d);
 		kfree(d);
