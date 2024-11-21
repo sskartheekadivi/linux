@@ -58,7 +58,7 @@
 			#clock-cells = <1>;
 		};
 
-		phy_gmii_sel: phy@4044 {
+		phy_gmii_sel: phy@1be000 {
 			compatible = "ti,am654-phy-gmii-sel";
 			reg = <0x1be000 0x8>;
 			#phy-cells = <1>;
@@ -598,6 +598,7 @@
 			<0x00 0x48800000 0x00 0x80000>,
 			<0x00 0x47000000 0x00 0x200000>;
 		reg-names = "gcfg", "bchanrt", "rchanrt", "tchanrt", "ringrt";
+		#address-cells = <2>;
 		#interrupt-cells = <1>;
 		#dma-cells = <3>;
 		interrupt-map = <0 0 0 &gic500 0 0 GIC_SPI 352 IRQ_TYPE_LEVEL_HIGH>,
@@ -664,6 +665,7 @@
 		      <0x00 0x48900000 0x00 0x80000>,
 		      <0x00 0x47200000 0x00 0x100000>;
 		reg-names = "gcfg", "rchanrt", "tchanrt", "ringrt";
+		#address-cells = <2>;
 		#dma-cells = <2>;
 		#interrupt-cells = <1>;
 		interrupt-map = <0 0 0 &gic500 0 0 GIC_SPI 354 IRQ_TYPE_LEVEL_HIGH>,
