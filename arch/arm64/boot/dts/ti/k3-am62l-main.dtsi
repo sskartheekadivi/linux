@@ -83,9 +83,8 @@
 		power-domains = <&scmi_pds 77>;
 		clocks = <&scmi_clk 312>;
 		clock-names = "fclk";
-		dmas = <&main_bcdma 0 0xC401 0>, <&main_bcdma 0 0x4401 0>;
+		dmas = <&main_pktdma 0xC401 0>, <&main_pktdma 0x4401 0>;
 		dma-names = "tx", "rx";
-		status = "disabled";
 	};
 
 	main_uart2: serial@2820000 {
