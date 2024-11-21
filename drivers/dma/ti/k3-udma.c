@@ -209,7 +209,6 @@ struct udma_dev {
 	struct udma_tchan *tchans;
 	struct udma_rchan *rchans;
 	struct udma_rflow *rflows;
-	int *ring_irqs;
 
 	struct udma_chan *channels;
 	u32 psil_base;
@@ -274,8 +273,6 @@ struct udma_chan_config {
 	int mapped_channel_id;
 	/* PKTDMA default tflow or rflow for mapped channel */
 	int default_flow_id;
-	/* BCDMA mapped irq index */
-	int irq_idx;
 
 	enum dma_transfer_direction dir;
 };
@@ -796,12 +793,12 @@ static void udma_decrement_byte_counters(struct udma_chan *uc, u32 val)
 		udma_rchanrt_write(uc, UDMA_CHAN_RT_BCNT_REG, val);
 		udma_rchanrt_write(uc, UDMA_CHAN_RT_SBCNT_REG, val);
 		if (uc->config.ep_type != PSIL_EP_NATIVE)
-			udma_rchanrt_write(uc, UDMA_CHAN_RT_PEER_BCNT_REG, val);
+			udma_rchanrt_write(uc, 0x810, val);
 	} else {
 		udma_tchanrt_write(uc, UDMA_CHAN_RT_BCNT_REG, val);
 		udma_tchanrt_write(uc, UDMA_CHAN_RT_SBCNT_REG, val);
 		if (!uc->bchan && uc->config.ep_type != PSIL_EP_NATIVE)
-			udma_tchanrt_write(uc, UDMA_CHAN_RT_PEER_BCNT_REG, val);
+			udma_tchanrt_write(uc, 0x810, val);
 	}
 }
 
@@ -820,8 +817,8 @@ static void udma_reset_counters(struct udma_chan *uc)
 		udma_tchanrt_write(uc, UDMA_CHAN_RT_PCNT_REG, val);
 
 		if (!uc->bchan) {
-			val = udma_tchanrt_read(uc, UDMA_CHAN_RT_PEER_BCNT_REG);
-			udma_tchanrt_write(uc, UDMA_CHAN_RT_PEER_BCNT_REG, val);
+			val = udma_tchanrt_read(uc, 0x810);
+			udma_tchanrt_write(uc, 0x810, val);
 		}
 	}
 
@@ -835,8 +832,8 @@ static void udma_reset_counters(struct udma_chan *uc)
 		val = udma_rchanrt_read(uc, UDMA_CHAN_RT_PCNT_REG);
 		udma_rchanrt_write(uc, UDMA_CHAN_RT_PCNT_REG, val);
 
-		val = udma_rchanrt_read(uc, UDMA_CHAN_RT_PEER_BCNT_REG);
-		udma_rchanrt_write(uc, UDMA_CHAN_RT_PEER_BCNT_REG, val);
+		val = udma_rchanrt_read(uc, 0x810);
+		udma_rchanrt_write(uc, 0x810, val);
 	}
 }
 
@@ -1040,7 +1037,9 @@ static int udma_stop(struct udma_chan *uc)
 {
 	enum udma_chan_state old_state = uc->state;
 
-	return 0;
+	if (uc->ud->match_data->type == DMA_TYPE_BCDMA_V2)
+		return 0;
+
 	uc->state = UDMA_CHAN_IS_TERMINATING;
 	reinit_completion(&uc->teardown_completed);
 
@@ -1049,9 +1048,15 @@ static int udma_stop(struct udma_chan *uc)
 		if (!uc->cyclic && !uc->desc)
 			udma_push_to_ring(uc, -1);
 
-		udma_rchanrt_write(uc, UDMA_CHAN_RT_PEER_RT_EN_REG,
-				   UDMA_PEER_RT_EN_ENABLE |
-				   UDMA_PEER_RT_EN_TEARDOWN);
+		if (uc->ud->match_data->type < DMA_TYPE_BCDMA_V2) {
+			udma_rchanrt_write(uc, UDMA_CHAN_RT_PEER_RT_EN_REG,
+					   UDMA_PEER_RT_EN_ENABLE |
+					   UDMA_PEER_RT_EN_TEARDOWN);
+		} else {
+			udma_rchanrt_update_bits(uc, UDMA_CHAN_RT_CTL_REG,
+					UDMA_CHAN_RT_CTL_TDOWN,
+					UDMA_CHAN_RT_CTL_TDOWN);
+		}
 		break;
 	case DMA_MEM_TO_DEV:
 		udma_tchanrt_write(uc, UDMA_CHAN_RT_PEER_RT_EN_REG,
@@ -1108,7 +1113,7 @@ static bool udma_is_desc_really_done(struct udma_chan *uc, struct udma_desc *d)
 	    uc->config.dir != DMA_MEM_TO_DEV || !(uc->config.tx_flags & DMA_PREP_INTERRUPT))
 		return true;
 
-	peer_bcnt = udma_tchanrt_read(uc, UDMA_CHAN_RT_PEER_BCNT_REG);
+	peer_bcnt = udma_tchanrt_read(uc, 0x810);
 	bcnt = udma_tchanrt_read(uc, UDMA_CHAN_RT_BCNT_REG);
 
 	/* Transfer is incomplete, store current residue and time stamp */
@@ -1857,10 +1862,10 @@ static int udma_alloc_rx_resources(struct udma_chan *uc)
 	}
 
 	rflow = uc->rflow;
-	if (ud->tflow_cnt)
+	if (ud->tflow_cnt && ud->match_data->type != DMA_TYPE_PKTDMA_V2) {
 		fd_ring_id = ud->tflow_cnt + rflow->id;
-	else {
-		if (ud->match_data->type == DMA_TYPE_BCDMA_V2)
+	} else {
+		if (ud->match_data->type == DMA_TYPE_BCDMA_V2 || ud->match_data->type == DMA_TYPE_PKTDMA_V2)
 			fd_ring_id = uc->rchan->id;
 		else
 			fd_ring_id = ud->bchan_cnt + ud->tchan_cnt + ud->echan_cnt +
@@ -2744,9 +2749,13 @@ static int pktdma_alloc_chan_resources(struct dma_chan *chan)
 		uc->config.dst_thread = uc->config.remote_thread_id;
 		uc->config.dst_thread |= K3_PSIL_DST_THREAD_ID_OFFSET;
 
-		irq_ring_idx = uc->tchan->tflow_id + oes->pktdma_tchan_flow;
 
-		ret = pktdma_tisci_tx_channel_config(uc);
+		if (ud->match_data->type == DMA_TYPE_PKTDMA_V2) {
+			irq_ring_idx = uc->config.mapped_channel_id;
+		} else {
+			irq_ring_idx = uc->tchan->tflow_id + oes->pktdma_tchan_flow;
+			ret = pktdma_tisci_tx_channel_config(uc);
+		}
 		break;
 	case DMA_DEV_TO_MEM:
 		/* Slave transfer synchronized - dev to mem (RX) trasnfer */
@@ -2763,9 +2772,13 @@ static int pktdma_alloc_chan_resources(struct dma_chan *chan)
 		uc->config.dst_thread = (ud->psil_base + uc->rchan->id) |
 					K3_PSIL_DST_THREAD_ID_OFFSET;
 
-		irq_ring_idx = uc->rflow->id + oes->pktdma_rchan_flow;
-
-		ret = pktdma_tisci_rx_channel_config(uc);
+		if (ud->match_data->type == DMA_TYPE_PKTDMA_V2) {
+			irq_ring_idx = uc->config.mapped_channel_id;
+			udma_write(uc->rflow->reg_rt, UDMA_RX_FLOWRT_RFA, BIT(28));
+		} else {
+			irq_ring_idx = uc->rflow->id + oes->pktdma_rchan_flow;
+			ret = pktdma_tisci_rx_channel_config(uc);
+		}
 		break;
 	default:
 		/* Can not happen */
@@ -3989,8 +4002,7 @@ static enum dma_status udma_tx_status(struct dma_chan *chan,
 			bcnt = udma_tchanrt_read(uc, UDMA_CHAN_RT_SBCNT_REG);
 
 			if (uc->config.ep_type != PSIL_EP_NATIVE) {
-				peer_bcnt = udma_tchanrt_read(uc,
-						UDMA_CHAN_RT_PEER_BCNT_REG);
+				peer_bcnt = udma_tchanrt_read(uc, 0x810);
 
 				if (bcnt > peer_bcnt)
 					delay = bcnt - peer_bcnt;
@@ -3999,8 +4011,7 @@ static enum dma_status udma_tx_status(struct dma_chan *chan,
 			bcnt = udma_rchanrt_read(uc, UDMA_CHAN_RT_BCNT_REG);
 
 			if (uc->config.ep_type != PSIL_EP_NATIVE) {
-				peer_bcnt = udma_rchanrt_read(uc,
-						UDMA_CHAN_RT_PEER_BCNT_REG);
+				peer_bcnt = udma_rchanrt_read(uc, 0x810);
 
 				if (peer_bcnt > bcnt)
 					delay = peer_bcnt - bcnt;
@@ -4092,7 +4103,6 @@ static int udma_terminate_all(struct dma_chan *chan)
 	LIST_HEAD(head);
 
 	spin_lock_irqsave(&uc->vc.lock, flags);
-
 	if (udma_is_chan_running(uc))
 		udma_stop(uc);
 
@@ -4243,7 +4253,7 @@ static void udma_free_chan_resources(struct dma_chan *chan)
 
 	/* Release PSI-L pairing */
 	if (uc->psil_paired) {
-		if (ud->match_data->type != DMA_TYPE_BCDMA_V2)
+		if (ud->match_data->type < DMA_TYPE_BCDMA_V2)
 			navss_psil_unpair(ud, uc->config.src_thread,
 					uc->config.dst_thread);
 		uc->psil_paired = false;
@@ -4347,7 +4357,7 @@ static bool udma_dma_filter_fn(struct dma_chan *chan, void *param)
 	ucc->ep_type = ep_config->ep_type;
 
 	if (((ud->match_data->type == DMA_TYPE_PKTDMA) ||
-		(ud->match_data->type == DMA_TYPE_BCDMA_V2)) &&
+		(ud->match_data->type >= DMA_TYPE_BCDMA_V2)) &&
 		ep_config->mapped_channel_id >= 0) {
 		ucc->mapped_channel_id = ep_config->mapped_channel_id;
 		ucc->default_flow_id = ep_config->default_flow_id;
@@ -4361,7 +4371,6 @@ static bool udma_dma_filter_fn(struct dma_chan *chan, void *param)
 	ucc->metadata_size =
 		(ucc->needs_epib ? CPPI5_INFO0_HDESC_EPIB_SIZE : 0) +
 		ucc->psd_size;
-	ucc->irq_idx = ep_config->irq_idx;
 
     if (ucc->ep_type != PSIL_EP_NATIVE) {
 		const struct udma_match_data *match_data = ud->match_data;
@@ -4711,8 +4720,8 @@ static int udma_get_mmrs(struct platform_device *pdev, struct udma_dev *ud)
 				BCDMA_CAP3_HBCHAN_CNT(cap3) +
 				BCDMA_CAP3_UBCHAN_CNT(cap3);
 		// hardcode tchan and rchan cnt to 64 to enable all 128 channels
-		ud->tchan_cnt = 64;
-		ud->rchan_cnt = 64;
+		ud->tchan_cnt = 67;
+		ud->rchan_cnt = 81;
 		ud->rflow_cnt = ud->rchan_cnt;
 		break;
 	case DMA_TYPE_PKTDMA:
@@ -4973,9 +4982,6 @@ static int bcdma_setup_resources(struct udma_dev *ud)
 	bitmap_zero(ud->bchan_map, ud->bchan_cnt);
 	ud->bchans = devm_kcalloc(dev, ud->bchan_cnt, sizeof(*ud->bchans),
 				  GFP_KERNEL);
-	if (ud->match_data->type == DMA_TYPE_BCDMA_V2)
-		ud->ring_irqs = devm_kcalloc(dev, ud->rchan_cnt + ud->tchan_cnt + ud->bchan_cnt, sizeof(*ud->ring_irqs),
-				GFP_KERNEL);
 	ud->tchan_map = devm_kmalloc_array(dev, BITS_TO_LONGS(ud->tchan_cnt),
 					   sizeof(unsigned long), GFP_KERNEL);
 	bitmap_zero(ud->tchan_map, ud->tchan_cnt);
@@ -5184,9 +5190,6 @@ static int pktdma_setup_resources(struct udma_dev *ud)
 	ud->tflow_map = devm_kmalloc_array(dev, BITS_TO_LONGS(ud->tflow_cnt),
 					   sizeof(unsigned long), GFP_KERNEL);
 	bitmap_zero(ud->tflow_map, ud->tflow_cnt);
-	if (ud->match_data->type == DMA_TYPE_PKTDMA_V2)
-		ud->ring_irqs = devm_kcalloc(dev, ud->tflow_cnt + ud->rflow_cnt, sizeof(*ud->ring_irqs),
-				GFP_KERNEL);
 	if (!ud->tchan_map || !ud->rchan_map || !ud->tflow_map || !ud->tchans ||
 	    !ud->rchans || !ud->rflows || !ud->rflow_in_use)
 		return -ENOMEM;
@@ -5492,13 +5495,13 @@ static void udma_dbg_summary_show_chan(struct seq_file *s,
 	case DMA_DEV_TO_MEM:
 		seq_printf(s, "rchan%d [0x%04x -> 0x%04x], ", uc->rchan->id,
 			   ucc->src_thread, ucc->dst_thread);
-		if (uc->ud->match_data->type == DMA_TYPE_PKTDMA)
+		if (uc->ud->match_data->type == DMA_TYPE_PKTDMA_V2)
 			seq_printf(s, "rflow%d, ", uc->rflow->id);
 		break;
 	case DMA_MEM_TO_DEV:
 		seq_printf(s, "tchan%d [0x%04x -> 0x%04x], ", uc->tchan->id,
 			   ucc->src_thread, ucc->dst_thread);
-		if (uc->ud->match_data->type == DMA_TYPE_PKTDMA)
+		if (uc->ud->match_data->type == DMA_TYPE_PKTDMA_V2)
 			seq_printf(s, "tflow%d, ", uc->tchan->tflow_id);
 		break;
 	default:
@@ -5690,7 +5693,8 @@ static int udma_probe(struct platform_device *pdev)
 
 	dma_cap_set(DMA_SLAVE, ud->ddev.cap_mask);
 	/* cyclic operation is not supported via PKTDMA */
-	if (ud->match_data->type != DMA_TYPE_PKTDMA) {
+	if ((ud->match_data->type != DMA_TYPE_PKTDMA) &&
+	    (ud->match_data->type != DMA_TYPE_PKTDMA_V2)) {
 		dma_cap_set(DMA_CYCLIC, ud->ddev.cap_mask);
 		ud->ddev.device_prep_dma_cyclic = udma_prep_dma_cyclic;
 	}

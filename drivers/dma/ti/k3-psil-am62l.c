@@ -7,14 +7,24 @@
 
 #include "k3-psil-priv.h"
 
+#define PSIL_PDMA_XY_TR(x, ch)					\
+	{							\
+		.thread_id = x,					\
+		.ep_config = {					\
+			.ep_type = PSIL_EP_PDMA_XY,		\
+			.mapped_channel_id = ch,		\
+			.default_flow_id = -1,			\
+		},						\
+	}
+
 #define PSIL_PDMA_XY_PKT(x, ch)					\
 	{							\
 		.thread_id = x,					\
 		.ep_config = {					\
 			.ep_type = PSIL_EP_PDMA_XY,		\
 			.mapped_channel_id = ch,		\
-			.pkt_mode = 0,				\
-			.default_flow_id = -1	\
+			.pkt_mode = 1,				\
+			.default_flow_id = -1			\
 		},						\
 	}
 
@@ -79,34 +89,22 @@ static struct psil_ep am62l_src_ep_map[] = {
 	PSIL_PDMA_XY_PKT(0x4405, 10),
 	PSIL_PDMA_XY_PKT(0x4406, 12),
 	/* PDMA_MAIN0 - SPI0 - CH0-3 */
-	PSIL_PDMA_XY_PKT(0x4300, 16),
-	PSIL_PDMA_XY_PKT(0x4300, 18),
-	PSIL_PDMA_XY_PKT(0x4300, 20),
-	PSIL_PDMA_XY_PKT(0x4300, 22),
+	PSIL_PDMA_XY_TR(0x4300, 16),
 	/* PDMA_MAIN0 - SPI1 - CH0-3 */
-	PSIL_PDMA_XY_PKT(0x4301, 24),
-	PSIL_PDMA_XY_PKT(0x4301, 26),
-	PSIL_PDMA_XY_PKT(0x4301, 28),
-	PSIL_PDMA_XY_PKT(0x4301, 30),
+	PSIL_PDMA_XY_TR(0x4301, 24),
 	/* PDMA_MAIN0 - SPI2 - CH0-3 */
-	PSIL_PDMA_XY_PKT(0x4302, 32),
-	PSIL_PDMA_XY_PKT(0x4302, 34),
-	PSIL_PDMA_XY_PKT(0x4302, 36),
-	PSIL_PDMA_XY_PKT(0x4302, 38),
+	PSIL_PDMA_XY_TR(0x4302, 32),
 	/* PDMA_MAIN0 - SPI3 - CH0-3 */
-	PSIL_PDMA_XY_PKT(0x4303, 40),
-	PSIL_PDMA_XY_PKT(0x4303, 42),
-	PSIL_PDMA_XY_PKT(0x4303, 44),
-	PSIL_PDMA_XY_PKT(0x4303, 46),
+	PSIL_PDMA_XY_TR(0x4303, 40),
 	/* PDMA_MAIN2 - MCASP0-2 */
 	PSIL_PDMA_MCASP(0x4500, 48),
 	PSIL_PDMA_MCASP(0x4501, 50),
 	PSIL_PDMA_MCASP(0x4502, 52),
 	/* PDMA_MAIN0 - AES */
-	PSIL_PDMA_XY_PKT(0x4700, 65),
+	PSIL_PDMA_XY_TR(0x4700, 65),
 	/* PDMA_MAIN0 - ADC */
-	PSIL_PDMA_XY_PKT(0x4503, 80),
-	PSIL_PDMA_XY_PKT(0x4504, 81),
+	PSIL_PDMA_XY_TR(0x4503, 80),
+	PSIL_PDMA_XY_TR(0x4504, 81),
 	PSIL_ETHERNET(0x4600, 96, 96, 16),
 };
 
@@ -121,23 +119,23 @@ static struct psil_ep am62l_dst_ep_map[] = {
 	PSIL_PDMA_XY_PKT(0xC405, 11),
 	PSIL_PDMA_XY_PKT(0xC406, 13),
 	/* PDMA_MAIN0 - SPI0 - CH0-3 */
-	PSIL_PDMA_XY_PKT(0xC300, 17),
+	PSIL_PDMA_XY_TR(0xC300, 17),
 	/* PDMA_MAIN0 - SPI1 - CH0-3 */
-	PSIL_PDMA_XY_PKT(0xC301, 25),
+	PSIL_PDMA_XY_TR(0xC301, 25),
 	/* PDMA_MAIN0 - SPI2 - CH0-3 */
-	PSIL_PDMA_XY_PKT(0xC302, 33),
+	PSIL_PDMA_XY_TR(0xC302, 33),
 	/* PDMA_MAIN0 - SPI3 - CH0-3 */
-	PSIL_PDMA_XY_PKT(0xC303, 41),
+	PSIL_PDMA_XY_TR(0xC303, 41),
 	/* PDMA_MAIN2 - MCASP0-2 */
 	PSIL_PDMA_MCASP(0xC500, 49),
 	PSIL_PDMA_MCASP(0xC501, 51),
 	PSIL_PDMA_MCASP(0xC502, 53),
 	/* PDMA_MAIN0 - SHA */
-	PSIL_PDMA_XY_PKT(0xC700, 64),
+	PSIL_PDMA_XY_TR(0xC700, 64),
 	/* PDMA_MAIN0 - AES */
-	PSIL_PDMA_XY_PKT(0x4701, 66),
+	PSIL_PDMA_XY_TR(0x4701, 66),
 	/* PDMA_MAIN0 - CRC32 - CH0-1 */
-	PSIL_PDMA_XY_PKT(0xC702, 67),
+	PSIL_PDMA_XY_TR(0xC702, 67),
 	/* CPSW3G */
 	PSIL_ETHERNET(0xc600, 64, 64, 2),
 	PSIL_ETHERNET(0xc601, 66, 66, 2),
