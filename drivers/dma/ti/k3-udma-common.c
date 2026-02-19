@@ -396,7 +396,8 @@ udma_prep_slave_sg_tr(struct udma_chan *uc, struct scatterlist *sgl,
 	}
 
 	cppi5_tr_csf_set(&tr_req[tr_idx - 1].flags,
-			 CPPI5_TR_CSF_SUPR_EVT | CPPI5_TR_CSF_EOP);
+			 (tx_flags & DMA_PREP_INTERRUPT ? 0 : CPPI5_TR_CSF_SUPR_EVT) |
+			 CPPI5_TR_CSF_EOP);
 
 	return d;
 }
