@@ -80,6 +80,125 @@
 		ti,davinci-gpio-unbanked = <0>;
 	};
 
+	main_bcdma: dma-controller@485c4000 {
+		compatible = "ti,am62l-dmss-bcdma";
+		reg = <0x00 0x485c4000 0x00 0x4000>,
+			<0x00 0x48880000 0x00 0x10000>,
+			<0x00 0x48800000 0x00 0x80000>,
+			<0x00 0x47000000 0x00 0x200000>;
+		reg-names = "gcfg", "bchanrt", "chanrt", "ringrt";
+		#dma-cells = <4>;
+		interrupts = <GIC_SPI 352 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 353 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 356 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 357 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 360 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 361 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 364 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 365 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 368 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 369 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 372 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 373 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 376 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 377 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 320 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 321 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 324 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 325 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 328 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 329 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 332 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 333 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 384 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 385 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 386 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 387 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 388 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 389 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 52 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 49 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 50 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 482 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 548 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 516 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 517 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 518 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 519 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 520 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 521 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 522 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 523 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 524 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 525 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 526 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 527 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 528 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 529 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 530 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 531 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-names = "chan0", "chan1", "chan2", "chan3", "chan4",
+				  "chan5", "chan6", "chan7", "chan8", "chan9",
+				  "chan10", "chan11", "chan12", "chan13",
+				  "chan16", "chan17", "chan24", "chan25",
+				  "chan32", "chan33", "chan40", "chan41",
+				  "chan48", "chan49", "chan50", "chan51",
+				  "chan52", "chan53", "chan64", "chan65",
+				  "chan66", "chan80", "chan67", "chan128",
+				  "chan129", "chan130", "chan131", "chan132",
+				  "chan133", "chan134", "chan135", "chan136",
+				  "chan137", "chan138", "chan139", "chan140",
+				  "chan141", "chan142", "chan143";
+	};
+
+	main_pktdma: dma-controller@485c0000 {
+		compatible = "ti,am62l-dmss-pktdma";
+		reg = <0x00 0x485c0000 0x00 0x4000>,
+			<0x00 0x48900000 0x00 0x80000>,
+			<0x00 0x47200000 0x00 0x100000>;
+		reg-names = "gcfg", "chanrt", "ringrt";
+		#dma-cells = <2>;
+		interrupts = <GIC_SPI 354 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 355 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 358 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 359 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 362 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 363 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 366 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 367 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 370 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 371 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 374 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 375 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 378 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 379 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 500 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 501 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 502 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 503 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 504 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 505 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 506 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 507 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 508 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 509 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 510 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 511 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 512 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 513 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 514 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 515 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 484 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-names = "chan0", "chan1", "chan2", "chan3", "chan4",
+				  "chan5", "chan6", "chan7", "chan8", "chan9",
+				  "chan10", "chan11", "chan12", "chan13",
+				  "chan64", "chan65", "chan66", "chan67",
+				  "chan68", "chan69", "chan70", "chan71",
+				  "chan72", "chan73", "chan74", "chan75",
+				  "chan76", "chan77", "chan78", "chan79",
+				  "chan96";
+	};
+
 	timer0: timer@2400000 {
 		compatible = "ti,am654-timer";
 		reg = <0x00 0x2400000 0x00 0x400>;
