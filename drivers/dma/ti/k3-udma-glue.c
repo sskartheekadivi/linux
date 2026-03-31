@@ -84,7 +84,6 @@ struct k3_udma_glue_rx_channel {
 	struct k3_udma_glue_rx_flow *flows;
 	u32 flow_num;
 	u32 flows_ready;
-	bool single_fdq;	/* one FDQ for all flows */
 };
 
 static void k3_udma_chan_dev_release(struct device *dev)
@@ -505,9 +504,10 @@ int k3_udma_glue_enable_tx_chn(struct k3_udma_glue_tx_channel *tx_chn)
 {
 	int ret;
 
-	if (tx_chn->common.udmax->match_data->version == K3_UDMA_V2) {
+	if (tx_chn->common.udmax->match_data->type == DMA_TYPE_PKTDMA_V2) {
 		xudma_tchanrt_write(tx_chn->udma_tchanx, UDMA_CHAN_RT_CTL_REG,
-				    UDMA_CHAN_RT_CTL_AUTOPAIR | UDMA_CHAN_RT_CTL_EN);
+				UDMA_CHAN_RT_CTL_AUTOPAIR | UDMA_CHAN_RT_CTL_EN);
+
 		xudma_tchanrt_write(tx_chn->udma_tchanx, UDMA_CHAN_RT_PEER_RT_EN_REG,
 				    UDMA_PEER_RT_EN_ENABLE);
 	} else {
@@ -522,10 +522,10 @@ int k3_udma_glue_enable_tx_chn(struct k3_udma_glue_tx_channel *tx_chn)
 		tx_chn->psil_paired = true;
 
 		xudma_tchanrt_write(tx_chn->udma_tchanx, UDMA_CHAN_RT_PEER_RT_EN_REG,
-				    UDMA_PEER_RT_EN_ENABLE);
+				UDMA_PEER_RT_EN_ENABLE);
 
 		xudma_tchanrt_write(tx_chn->udma_tchanx, UDMA_CHAN_RT_CTL_REG,
-				    UDMA_CHAN_RT_CTL_EN);
+				UDMA_CHAN_RT_CTL_EN);
 	}
 
 	k3_udma_glue_dump_tx_rt_chn(tx_chn, "txchn en");
@@ -824,7 +824,7 @@ static int k3_udma_glue_cfg_rx_flow(struct k3_udma_glue_rx_channel *rx_chn,
 
 	if (!tisci_rm->tisci) {
 		xudma_rflowrt_write(flow->udma_rflow, UDMA_RX_FLOWRT_RFA,
-				    UDMA_CHAN_RT_CTL_TDOWN | UDMA_CHAN_RT_CTL_PAUSE);
+				UDMA_CHAN_RT_CTL_TDOWN | UDMA_CHAN_RT_CTL_PAUSE);
 		rx_chn->flows_ready++;
 		return 0;
 	}
@@ -997,13 +997,10 @@ k3_udma_glue_request_rx_chn_priv(struct device *dev, const char *name,
 
 	ep_cfg = rx_chn->common.ep_config;
 
-	if (xudma_is_pktdma(rx_chn->common.udmax)) {
+	if (xudma_is_pktdma(rx_chn->common.udmax))
 		rx_chn->udma_rchan_id = ep_cfg->mapped_channel_id;
-		rx_chn->single_fdq = false;
-	} else {
+	else
 		rx_chn->udma_rchan_id = -1;
-		rx_chn->single_fdq = true;
-	}
 
 	/* request and cfg UDMAP RX channel */
 	rx_chn->udma_rchanx = xudma_rchan_get(rx_chn->common.udmax,
@@ -1133,9 +1130,6 @@ k3_udma_glue_request_remote_rx_chn_common(struct k3_udma_glue_rx_channel *rx_chn
 		rx_chn->common.chan_dev.dma_coherent = true;
 		dma_coerce_mask_and_coherent(&rx_chn->common.chan_dev,
 					     DMA_BIT_MASK(48));
-		rx_chn->single_fdq = false;
-	} else {
-		rx_chn->single_fdq = true;
 	}
 
 	ret = k3_udma_glue_allocate_rx_flows(rx_chn, cfg);
@@ -1415,9 +1409,9 @@ int k3_udma_glue_enable_rx_chn(struct k3_udma_glue_rx_channel *rx_chn)
 	if (rx_chn->flows_ready < rx_chn->flow_num)
 		return -EINVAL;
 
-	if (rx_chn->common.udmax->match_data->version == K3_UDMA_V2) {
+	if (rx_chn->common.udmax->match_data->type == DMA_TYPE_PKTDMA_V2) {
 		xudma_rchanrt_write(rx_chn->udma_rchanx, UDMA_CHAN_RT_CTL_REG,
-				    UDMA_CHAN_RT_CTL_AUTOPAIR |  UDMA_CHAN_RT_CTL_EN);
+				UDMA_CHAN_RT_CTL_AUTOPAIR |  UDMA_CHAN_RT_CTL_EN);
 	} else {
 		ret = xudma_navss_psil_pair(rx_chn->common.udmax,
 					    rx_chn->common.src_thread,
@@ -1430,10 +1424,10 @@ int k3_udma_glue_enable_rx_chn(struct k3_udma_glue_rx_channel *rx_chn)
 		rx_chn->psil_paired = true;
 
 		xudma_rchanrt_write(rx_chn->udma_rchanx, UDMA_CHAN_RT_CTL_REG,
-				    UDMA_CHAN_RT_CTL_EN);
+				UDMA_CHAN_RT_CTL_EN);
 
 		xudma_rchanrt_write(rx_chn->udma_rchanx, UDMA_CHAN_RT_PEER_RT_EN_REG,
-				    UDMA_PEER_RT_EN_ENABLE);
+				UDMA_PEER_RT_EN_ENABLE);
 	}
 
 	k3_udma_glue_dump_rx_rt_chn(rx_chn, "rxrt en");
@@ -1497,7 +1491,7 @@ EXPORT_SYMBOL_GPL(k3_udma_glue_tdown_rx_chn);
 
 void k3_udma_glue_reset_rx_chn(struct k3_udma_glue_rx_channel *rx_chn,
 		u32 flow_num, void *data,
-		void (*cleanup)(void *data, dma_addr_t desc_dma))
+		void (*cleanup)(void *data, dma_addr_t desc_dma), bool skip_fdq)
 {
 	struct k3_udma_glue_rx_flow *flow = &rx_chn->flows[flow_num];
 	struct device *dev = rx_chn->common.dev;
@@ -1509,7 +1503,7 @@ void k3_udma_glue_reset_rx_chn(struct k3_udma_glue_rx_channel *rx_chn,
 	dev_dbg(dev, "RX reset flow %u occ_rx %u\n", flow_num, occ_rx);
 
 	/* Skip RX FDQ in case one FDQ is used for the set of flows */
-	if (rx_chn->single_fdq && flow_num)
+	if (skip_fdq)
 		goto do_reset;
 
 	/*

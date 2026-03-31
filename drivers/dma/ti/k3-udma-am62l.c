@@ -8,6 +8,7 @@
 
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/delay.h>
 #include <linux/dmaengine.h>
 #include <linux/dma-mapping.h>
 #include <linux/dmapool.h>
@@ -26,18 +27,24 @@
 #include <linux/completion.h>
 #include <linux/iopoll.h>
 #include <linux/soc/ti/k3-ringacc.h>
+#include <linux/dma/k3-event-router.h>
+#include <linux/dma/ti-cppi5.h>
 
 #include "../virt-dma.h"
 #include "k3-udma.h"
 #include "k3-psil-priv.h"
 
-static const char * const v2_mmr_names[] = {
-	[V2_MMR_GCFG] = "gcfg",
-	[V2_MMR_BCHANRT] = "bchanrt",
-	[V2_MMR_CHANRT] = "chanrt",
+#define UDMA_CHAN_RT_STATIC_TR_XY_REG	0x800
+#define UDMA_CHAN_RT_STATIC_TR_Z_REG	0x804
+#define UDMA_CHAN_RT_PERIPH_BCNT_REG	0x810
+
+static const char * const am62l_mmr_names[] = {
+	[AM62L_MMR_GCFG] = "gcfg",
+	[AM62L_MMR_BCHANRT] = "bchanrt",
+	[AM62L_MMR_CHANRT] = "chanrt",
 };
 
-static int udma_v2_check_chan_autopair_completion(struct udma_chan *uc)
+static int am62l_udma_check_chan_autopair_completion(struct udma_chan *uc)
 {
 	u32 val;
 
@@ -51,7 +58,7 @@ static int udma_v2_check_chan_autopair_completion(struct udma_chan *uc)
 	return 0;
 }
 
-static bool udma_v2_is_chan_paused(struct udma_chan *uc)
+static bool am62l_udma_is_chan_paused(struct udma_chan *uc)
 {
 	u32 val, pause_mask;
 
@@ -69,7 +76,7 @@ static bool udma_v2_is_chan_paused(struct udma_chan *uc)
 	return false;
 }
 
-static void udma_v2_decrement_byte_counters(struct udma_chan *uc, u32 val)
+static void am62l_udma_decrement_byte_counters(struct udma_chan *uc, u32 val)
 {
 	udma_chanrt_write(uc, UDMA_CHAN_RT_BCNT_REG, val);
 	udma_chanrt_write(uc, UDMA_CHAN_RT_SBCNT_REG, val);
@@ -77,7 +84,7 @@ static void udma_v2_decrement_byte_counters(struct udma_chan *uc, u32 val)
 		udma_chanrt_write(uc, UDMA_CHAN_RT_PERIPH_BCNT_REG, val);
 }
 
-static void udma_v2_reset_counters(struct udma_chan *uc)
+static void am62l_udma_reset_counters(struct udma_chan *uc)
 {
 	u32 val;
 
@@ -96,12 +103,12 @@ static void udma_v2_reset_counters(struct udma_chan *uc)
 	}
 }
 
-static int udma_v2_reset_chan(struct udma_chan *uc, bool hard)
+static int am62l_udma_reset_chan(struct udma_chan *uc, bool hard)
 {
 	udma_chanrt_write(uc, UDMA_CHAN_RT_CTL_REG, 0);
 
 	/* Reset all counters */
-	udma_v2_reset_counters(uc);
+	am62l_udma_reset_counters(uc);
 
 	/* Hard reset: re-initialize the channel to reset */
 	if (hard) {
@@ -123,17 +130,17 @@ static int udma_v2_reset_chan(struct udma_chan *uc, bool hard)
 		 */
 		if (uc->config.dir == DMA_DEV_TO_MEM)
 			udma_chanrt_update_bits(uc, UDMA_CHAN_RT_CTL_REG,
-						UDMA_CHAN_RT_CTL_EN | UDMA_CHAN_RT_CTL_TDOWN |
-						UDMA_CHAN_RT_CTL_FTDOWN,
-						UDMA_CHAN_RT_CTL_EN | UDMA_CHAN_RT_CTL_TDOWN |
-						UDMA_CHAN_RT_CTL_FTDOWN);
+					UDMA_CHAN_RT_CTL_EN | UDMA_CHAN_RT_CTL_TDOWN |
+					UDMA_CHAN_RT_CTL_FTDOWN,
+					UDMA_CHAN_RT_CTL_EN | UDMA_CHAN_RT_CTL_TDOWN |
+					UDMA_CHAN_RT_CTL_FTDOWN);
 	}
 	uc->state = UDMA_CHAN_IS_IDLE;
 
 	return 0;
 }
 
-static int udma_v2_start(struct udma_chan *uc)
+static int am62l_udma_start(struct udma_chan *uc)
 {
 	struct virt_dma_desc *vd = vchan_next_desc(&uc->vc);
 	struct udma_dev *ud = uc->ud;
@@ -155,12 +162,12 @@ static int udma_v2_start(struct udma_chan *uc)
 	}
 
 	/* Make sure that we clear the teardown bit, if it is set */
-	ud->reset_chan(uc, false);
+	ud->udma_reset_chan(uc, false);
 
 	/* Push descriptors before we start the channel */
 	udma_start_desc(uc);
 
-	switch (uc->config.dir) {
+	switch (uc->desc->dir) {
 	case DMA_DEV_TO_MEM:
 		/* Config remote TR */
 		if (uc->config.ep_type == PSIL_EP_PDMA_XY) {
@@ -175,13 +182,13 @@ static int udma_v2_start(struct udma_chan *uc)
 				val |= PDMA_STATIC_TR_XY_BURST;
 
 			udma_chanrt_write(uc,
-					  UDMA_CHAN_RT_STATIC_TR_XY_REG,
-					  val);
+					   UDMA_CHAN_RT_STATIC_TR_XY_REG,
+					   val);
 
 			udma_chanrt_write(uc,
-					  UDMA_CHAN_RT_STATIC_TR_Z_REG,
-					  PDMA_STATIC_TR_Z(uc->desc->static_tr.bstcnt,
-							   match_data->statictr_z_mask));
+				UDMA_CHAN_RT_STATIC_TR_Z_REG,
+				PDMA_STATIC_TR_Z(uc->desc->static_tr.bstcnt,
+						 match_data->statictr_z_mask));
 
 			/* save the current staticTR configuration */
 			memcpy(&uc->static_tr, &uc->desc->static_tr,
@@ -189,14 +196,14 @@ static int udma_v2_start(struct udma_chan *uc)
 		}
 
 		udma_chanrt_write(uc, UDMA_CHAN_RT_CTL_REG,
-				  UDMA_CHAN_RT_CTL_EN | UDMA_CHAN_RT_CTL_AUTOPAIR);
+				UDMA_CHAN_RT_CTL_EN | UDMA_CHAN_RT_CTL_AUTOPAIR);
 
 		/* Poll for autopair completion */
-		ret = read_poll_timeout_atomic(udma_v2_check_chan_autopair_completion,
-					       status, status != 0, 100, 500, false, uc);
+		ret = read_poll_timeout_atomic(am62l_udma_check_chan_autopair_completion,
+				status, status != 0, 100, 500, false, uc);
 
-		if (status <= 0)
-			return ret;
+		if (ret <= 0)
+			return -ETIMEDOUT;
 
 		break;
 	case DMA_MEM_TO_DEV:
@@ -211,8 +218,8 @@ static int udma_v2_start(struct udma_chan *uc)
 				val |= PDMA_STATIC_TR_XY_BURST;
 
 			udma_chanrt_write(uc,
-					  UDMA_CHAN_RT_STATIC_TR_XY_REG,
-					  val);
+					   UDMA_CHAN_RT_STATIC_TR_XY_REG,
+					   val);
 
 			/* save the current staticTR configuration */
 			memcpy(&uc->static_tr, &uc->desc->static_tr,
@@ -220,11 +227,11 @@ static int udma_v2_start(struct udma_chan *uc)
 		}
 
 		udma_chanrt_write(uc, UDMA_CHAN_RT_CTL_REG,
-				  UDMA_CHAN_RT_CTL_EN | UDMA_CHAN_RT_CTL_AUTOPAIR);
+				UDMA_CHAN_RT_CTL_EN | UDMA_CHAN_RT_CTL_AUTOPAIR);
 
 		/* Poll for autopair completion */
-		ret = read_poll_timeout_atomic(udma_v2_check_chan_autopair_completion,
-					       status, status != 0, 100, 500, false, uc);
+		ret = read_poll_timeout_atomic(am62l_udma_check_chan_autopair_completion,
+				status, status != 0, 100, 500, false, uc);
 
 		if (status <= 0)
 			return -ETIMEDOUT;
@@ -247,7 +254,7 @@ out:
 	return 0;
 }
 
-static int udma_v2_stop(struct udma_chan *uc)
+static int am62l_udma_stop(struct udma_chan *uc)
 {
 	uc->state = UDMA_CHAN_IS_TERMINATING;
 	reinit_completion(&uc->teardown_completed);
@@ -259,13 +266,40 @@ static int udma_v2_stop(struct udma_chan *uc)
 
 	udma_chanrt_write(uc, UDMA_CHAN_RT_PEER_REG(8), UDMA_CHAN_RT_PEER_REG8_FLUSH);
 	udma_chanrt_update_bits(uc, UDMA_CHAN_RT_CTL_REG,
-				UDMA_CHAN_RT_CTL_EN | UDMA_CHAN_RT_CTL_TDOWN,
-				UDMA_CHAN_RT_CTL_EN | UDMA_CHAN_RT_CTL_TDOWN);
+		UDMA_CHAN_RT_CTL_EN | UDMA_CHAN_RT_CTL_TDOWN,
+		UDMA_CHAN_RT_CTL_EN | UDMA_CHAN_RT_CTL_TDOWN);
 
 	return 0;
 }
 
-static irqreturn_t udma_v2_udma_irq_handler(int irq, void *data)
+static bool am62l_udma_is_desc_really_done(struct udma_chan *uc, struct udma_desc *d)
+{
+	u32 peer_bcnt, bcnt;
+
+	/*
+	 * Only TX towards PDMA is affected.
+	 * If DMA_PREP_INTERRUPT is not set by consumer then skip the transfer
+	 * completion calculation, consumer must ensure that there is no stale
+	 * data in DMA fabric in this case.
+	 */
+	if (uc->config.ep_type == PSIL_EP_NATIVE ||
+	    uc->config.dir != DMA_MEM_TO_DEV || !(uc->config.tx_flags & DMA_PREP_INTERRUPT))
+		return true;
+
+	peer_bcnt = udma_chanrt_read(uc, UDMA_CHAN_RT_PERIPH_BCNT_REG);
+	bcnt = udma_chanrt_read(uc, UDMA_CHAN_RT_BCNT_REG);
+
+	/* Transfer is incomplete, store current residue and time stamp */
+	if (peer_bcnt < bcnt) {
+		uc->tx_drain.residue = bcnt - peer_bcnt;
+		uc->tx_drain.tstamp = ktime_get();
+		return false;
+	}
+
+	return true;
+}
+
+static irqreturn_t am62l_udma_udma_irq_handler(int irq, void *data)
 {
 	struct udma_chan *uc = data;
 	struct udma_dev *ud = uc->ud;
@@ -292,8 +326,8 @@ static irqreturn_t udma_v2_udma_irq_handler(int irq, void *data)
 			vchan_cyclic_callback(&d->vd);
 		} else {
 			/* TODO: figure out the real amount of data */
-			ud->decrement_byte_counters(uc, d->residue);
-			ud->start(uc);
+			ud->udma_decrement_byte_counters(uc, d->residue);
+			ud->udma_start(uc);
 			vchan_cookie_complete(&d->vd);
 		}
 	}
@@ -303,7 +337,7 @@ static irqreturn_t udma_v2_udma_irq_handler(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
-static irqreturn_t udma_v2_ring_irq_handler(int irq, void *data)
+static irqreturn_t am62l_udma_ring_irq_handler(int irq, void *data)
 {
 	struct udma_chan *uc = data;
 	struct udma_dev *ud = uc->ud;
@@ -329,7 +363,7 @@ static irqreturn_t udma_v2_ring_irq_handler(int irq, void *data)
 		/* check teardown status */
 		if ((reg & UDMA_CHAN_RT_CTL_TDOWN) && !(reg & UDMA_CHAN_RT_CTL_EN))
 			complete_all(&uc->teardown_completed);
-		return udma_v2_udma_irq_handler(irq, data);
+		return am62l_udma_udma_irq_handler(irq, data);
 	}
 
 	if (udma_pop_from_ring(uc, &paddr) || !paddr)
@@ -347,7 +381,7 @@ static irqreturn_t udma_v2_ring_irq_handler(int irq, void *data)
 		}
 
 		if (!uc->desc)
-			ud->start(uc);
+			ud->udma_start(uc);
 
 		goto out;
 	}
@@ -368,9 +402,9 @@ static irqreturn_t udma_v2_ring_irq_handler(int irq, void *data)
 				udma_cyclic_packet_elapsed(uc);
 				vchan_cyclic_callback(&d->vd);
 			} else {
-				if (udma_is_desc_really_done(uc, d)) {
-					ud->decrement_byte_counters(uc, d->residue);
-					ud->start(uc);
+				if (ud->udma_is_desc_really_done(uc, d)) {
+					ud->udma_decrement_byte_counters(uc, d->residue);
+					ud->udma_start(uc);
 					vchan_cookie_complete(&d->vd);
 				} else {
 					schedule_delayed_work(&uc->tx_drain.work,
@@ -391,7 +425,7 @@ out:
 	return IRQ_HANDLED;
 }
 
-static int bcdma_v2_get_bchan(struct udma_chan *uc)
+static int am62l_bcdma_v2_get_bchan(struct udma_chan *uc)
 {
 	struct udma_dev *ud = uc->ud;
 	enum udma_tp_level tpl;
@@ -424,19 +458,19 @@ static int bcdma_v2_get_bchan(struct udma_chan *uc)
 	return 0;
 }
 
-static int bcdma_v2_alloc_bchan_resources(struct udma_chan *uc)
+static int am62l_bcdma_v2_alloc_bchan_resources(struct udma_chan *uc)
 {
 	struct k3_ring_cfg ring_cfg;
 	struct udma_dev *ud = uc->ud;
 	int ret;
 
-	ret = bcdma_v2_get_bchan(uc);
+	ret = am62l_bcdma_v2_get_bchan(uc);
 	if (ret)
 		return ret;
 
 	ret = k3_ringacc_request_rings_pair(ud->ringacc, ud->match_data->chan_cnt + uc->id, -1,
-					    &uc->bchan->t_ring,
-					    &uc->bchan->tc_ring);
+			&uc->bchan->t_ring,
+			&uc->bchan->tc_ring);
 	if (ret) {
 		ret = -EBUSY;
 		goto err_ring;
@@ -469,7 +503,7 @@ err_ring:
 	return ret;
 }
 
-static int udma_v2_alloc_tx_resources(struct udma_chan *uc)
+static int am62l_udma_alloc_tx_resources(struct udma_chan *uc)
 {
 	struct k3_ring_cfg ring_cfg;
 	struct udma_dev *ud = uc->ud;
@@ -522,7 +556,7 @@ err_ring:
 	return ret;
 }
 
-static int udma_v2_alloc_rx_resources(struct udma_chan *uc)
+static int am62l_udma_alloc_rx_resources(struct udma_chan *uc)
 {
 	struct udma_dev *ud = uc->ud;
 	struct k3_ring_cfg ring_cfg;
@@ -593,13 +627,13 @@ err_rflow:
 	return ret;
 }
 
-static int bcdma_v2_alloc_chan_resources(struct dma_chan *chan)
+static int am62l_bcdma_v2_alloc_chan_resources(struct dma_chan *chan)
 {
 	struct udma_chan *uc = to_udma_chan(chan);
 	struct udma_dev *ud = to_udma_dev(chan->device);
-	struct of_phandle_args out_irq;
-	__be32 addr[2] = {0, 0};
 	u32 irq_ring_idx;
+	__be32 addr[2] = {0, 0};
+	struct of_phandle_args out_irq;
 	int ret;
 
 	/* Only TR mode is supported */
@@ -619,18 +653,18 @@ static int bcdma_v2_alloc_chan_resources(struct dma_chan *chan)
 		dev_dbg(uc->ud->dev, "%s: chan%d as MEM-to-MEM\n", __func__,
 			uc->id);
 
-		ret = bcdma_v2_alloc_bchan_resources(uc);
+		ret = am62l_bcdma_v2_alloc_bchan_resources(uc);
 		if (ret)
 			return ret;
 
 		irq_ring_idx = ud->match_data->chan_cnt + uc->id;
 		break;
 	case DMA_MEM_TO_DEV:
-		/* Slave transfer synchronized - mem to dev (TX) transfer */
+		/* Slave transfer synchronized - mem to dev (TX) trasnfer */
 		dev_dbg(uc->ud->dev, "%s: chan%d as MEM-to-DEV\n", __func__,
 			uc->id);
 
-		ret = udma_v2_alloc_tx_resources(uc);
+		ret = am62l_udma_alloc_tx_resources(uc);
 		if (ret) {
 			uc->config.remote_thread_id = -1;
 			return ret;
@@ -644,11 +678,11 @@ static int bcdma_v2_alloc_chan_resources(struct dma_chan *chan)
 
 		break;
 	case DMA_DEV_TO_MEM:
-		/* Slave transfer synchronized - dev to mem (RX) transfer */
+		/* Slave transfer synchronized - dev to mem (RX) trasnfer */
 		dev_dbg(uc->ud->dev, "%s: chan%d as DEV-to-MEM\n", __func__,
 			uc->id);
 
-		ret = udma_v2_alloc_rx_resources(uc);
+		ret = am62l_udma_alloc_rx_resources(uc);
 		if (ret) {
 			uc->config.remote_thread_id = -1;
 			return ret;
@@ -674,7 +708,7 @@ static int bcdma_v2_alloc_chan_resources(struct dma_chan *chan)
 
 	if (udma_is_chan_running(uc)) {
 		dev_warn(ud->dev, "chan%d: is running!\n", uc->id);
-		ud->reset_chan(uc, false);
+		ud->udma_reset_chan(uc, false);
 		if (udma_is_chan_running(uc)) {
 			dev_err(ud->dev, "chan%d: won't stop!\n", uc->id);
 			ret = -EBUSY;
@@ -684,8 +718,8 @@ static int bcdma_v2_alloc_chan_resources(struct dma_chan *chan)
 
 	uc->dma_dev = dmaengine_get_dma_device(chan);
 	if (uc->config.dir == DMA_MEM_TO_MEM  && !uc->config.tr_trigger_type) {
-		uc->config.hdesc_size =
-			cppi5_trdesc_calc_size(2, sizeof(struct cppi5_tr_type15_t));
+		uc->config.hdesc_size = cppi5_trdesc_calc_size(
+					sizeof(struct cppi5_tr_type15_t), 2);
 
 		uc->hdesc_pool = dma_pool_create(uc->name, ud->ddev.dev,
 						 uc->config.hdesc_size,
@@ -713,8 +747,8 @@ static int bcdma_v2_alloc_chan_resources(struct dma_chan *chan)
 
 	uc->irq_num_ring = irq_create_of_mapping(&out_irq);
 
-	ret = devm_request_irq(ud->dev, uc->irq_num_ring, udma_v2_ring_irq_handler,
-			       IRQF_TRIGGER_HIGH, uc->name, uc);
+	ret = devm_request_irq(ud->dev, uc->irq_num_ring, am62l_udma_ring_irq_handler,
+			IRQF_TRIGGER_HIGH, uc->name, uc);
 	if (ret) {
 		dev_err(ud->dev, "chan%d: ring irq request failed\n", uc->id);
 		goto err_irq_free;
@@ -744,13 +778,13 @@ err_res_free:
 	return ret;
 }
 
-static int pktdma_v2_alloc_chan_resources(struct dma_chan *chan)
+static int am62l_pktdma_v2_alloc_chan_resources(struct dma_chan *chan)
 {
 	struct udma_chan *uc = to_udma_chan(chan);
 	struct udma_dev *ud = to_udma_dev(chan->device);
-	struct of_phandle_args out_irq;
-	__be32 addr[2] = {0, 0};
 	u32 irq_ring_idx;
+	__be32 addr[2] = {0, 0};
+	struct of_phandle_args out_irq;
 	int ret;
 
 	/*
@@ -763,11 +797,11 @@ static int pktdma_v2_alloc_chan_resources(struct dma_chan *chan)
 
 	switch (uc->config.dir) {
 	case DMA_MEM_TO_DEV:
-		/* Slave transfer synchronized - mem to dev (TX) transfer */
+		/* Slave transfer synchronized - mem to dev (TX) trasnfer */
 		dev_dbg(uc->ud->dev, "%s: chan%d as MEM-to-DEV\n", __func__,
 			uc->id);
 
-		ret = udma_v2_alloc_tx_resources(uc);
+		ret = am62l_udma_alloc_tx_resources(uc);
 		if (ret) {
 			uc->config.remote_thread_id = -1;
 			return ret;
@@ -777,14 +811,15 @@ static int pktdma_v2_alloc_chan_resources(struct dma_chan *chan)
 		uc->config.dst_thread = uc->config.remote_thread_id;
 		uc->config.dst_thread |= K3_PSIL_DST_THREAD_ID_OFFSET;
 
+
 		irq_ring_idx = uc->config.mapped_channel_id;
 		break;
 	case DMA_DEV_TO_MEM:
-		/* Slave transfer synchronized - dev to mem (RX) transfer */
+		/* Slave transfer synchronized - dev to mem (RX) trasnfer */
 		dev_dbg(uc->ud->dev, "%s: chan%d as DEV-to-MEM\n", __func__,
 			uc->id);
 
-		ret = udma_v2_alloc_rx_resources(uc);
+		ret = am62l_udma_alloc_rx_resources(uc);
 		if (ret) {
 			uc->config.remote_thread_id = -1;
 			return ret;
@@ -810,7 +845,7 @@ static int pktdma_v2_alloc_chan_resources(struct dma_chan *chan)
 
 	if (udma_is_chan_running(uc)) {
 		dev_warn(ud->dev, "chan%d: is running!\n", uc->id);
-		ud->reset_chan(uc, false);
+		ud->udma_reset_chan(uc, false);
 		if (udma_is_chan_running(uc)) {
 			dev_err(ud->dev, "chan%d: won't stop!\n", uc->id);
 			ret = -EBUSY;
@@ -843,8 +878,8 @@ static int pktdma_v2_alloc_chan_resources(struct dma_chan *chan)
 
 	uc->irq_num_ring = irq_create_of_mapping(&out_irq);
 
-	ret = devm_request_irq(ud->dev, uc->irq_num_ring, udma_v2_ring_irq_handler,
-			       IRQF_TRIGGER_HIGH, uc->name, uc);
+	ret = devm_request_irq(ud->dev, uc->irq_num_ring, am62l_udma_ring_irq_handler,
+			IRQF_TRIGGER_HIGH, uc->name, uc);
 
 	if (ret) {
 		dev_err(ud->dev, "chan%d: ring irq request failed\n", uc->id);
@@ -884,9 +919,9 @@ err_res_free:
 	return ret;
 }
 
-static enum dma_status udma_v2_tx_status(struct dma_chan *chan,
-					 dma_cookie_t cookie,
-					 struct dma_tx_state *txstate)
+static enum dma_status am62l_udma_tx_status(struct dma_chan *chan,
+				      dma_cookie_t cookie,
+				      struct dma_tx_state *txstate)
 {
 	struct udma_chan *uc = to_udma_chan(chan);
 	enum dma_status ret;
@@ -899,7 +934,7 @@ static enum dma_status udma_v2_tx_status(struct dma_chan *chan,
 	if (!udma_is_chan_running(uc))
 		ret = DMA_COMPLETE;
 
-	if (ret == DMA_IN_PROGRESS && udma_v2_is_chan_paused(uc))
+	if (ret == DMA_IN_PROGRESS && am62l_udma_is_chan_paused(uc))
 		ret = DMA_PAUSED;
 
 	if (ret == DMA_COMPLETE || !txstate)
@@ -955,41 +990,41 @@ out:
 	return ret;
 }
 
-static int udma_v2_pause(struct dma_chan *chan)
+static int am62l_udma_pause(struct dma_chan *chan)
 {
 	struct udma_chan *uc = to_udma_chan(chan);
 
 	/* pause the channel */
 	udma_chanrt_update_bits(uc, UDMA_CHAN_RT_CTL_REG,
-				UDMA_CHAN_RT_CTL_PAUSE, UDMA_CHAN_RT_CTL_PAUSE);
+			UDMA_CHAN_RT_CTL_PAUSE, UDMA_CHAN_RT_CTL_PAUSE);
 
 	return 0;
 }
 
-static int udma_v2_resume(struct dma_chan *chan)
+static int am62l_udma_resume(struct dma_chan *chan)
 {
 	struct udma_chan *uc = to_udma_chan(chan);
 
 	/* resume the channel */
 	udma_chanrt_update_bits(uc, UDMA_CHAN_RT_CTL_REG,
-				UDMA_CHAN_RT_CTL_PAUSE, 0);
+			UDMA_CHAN_RT_CTL_PAUSE, 0);
 
 	return 0;
 }
 
-static struct platform_driver bcdma_v2_driver;
-static struct platform_driver pktdma_v2_driver;
+static struct platform_driver am62l_bcdma_v2_driver;
+static struct platform_driver am62l_pktdma_v2_driver;
 
-static bool udma_v2_dma_filter_fn(struct dma_chan *chan, void *param)
+static bool am62l_udma_dma_filter_fn(struct dma_chan *chan, void *param)
 {
-	struct udma_v2_filter_param *filter_param;
-	struct psil_endpoint_config *ep_config;
 	struct udma_chan_config *ucc;
+	struct psil_endpoint_config *ep_config;
+	struct am62l_udma_filter_param *filter_param;
 	struct udma_chan *uc;
 	struct udma_dev *ud;
 
-	if (chan->device->dev->driver != &bcdma_v2_driver.driver &&
-	    chan->device->dev->driver != &pktdma_v2_driver.driver)
+	if (chan->device->dev->driver != &am62l_bcdma_v2_driver.driver &&
+		chan->device->dev->driver != &am62l_pktdma_v2_driver.driver)
 		return false;
 
 	uc = to_udma_chan(chan);
@@ -1032,8 +1067,8 @@ static bool udma_v2_dma_filter_fn(struct dma_chan *chan, void *param)
 	ucc->notdpkt = ep_config->notdpkt;
 	ucc->ep_type = ep_config->ep_type;
 
-	if (ud->match_data->version == K3_UDMA_V2 &&
-	    ep_config->mapped_channel_id >= 0) {
+	if ((ud->match_data->type >= DMA_TYPE_BCDMA_V2) &&
+		ep_config->mapped_channel_id >= 0) {
 		ucc->mapped_channel_id = ep_config->mapped_channel_id;
 		ucc->default_flow_id = ep_config->default_flow_id;
 	} else {
@@ -1050,12 +1085,12 @@ static bool udma_v2_dma_filter_fn(struct dma_chan *chan, void *param)
 	if (ucc->ep_type != PSIL_EP_NATIVE) {
 		const struct udma_match_data *match_data = ud->match_data;
 
-		if ((match_data->flags & UDMA_FLAG_PDMA_ACC32) && ep_config->pdma_acc32)
+		if ((match_data->flags & UDMA_FLAG_PDMA_ACC32) && (ep_config->pdma_acc32))
 			ucc->enable_acc32 = true;
 		else
 			ucc->enable_acc32 = false;
 
-		if ((match_data->flags & UDMA_FLAG_PDMA_BURST) && ep_config->pdma_burst)
+		if ((match_data->flags & UDMA_FLAG_PDMA_BURST) && (ep_config->pdma_burst))
 			ucc->enable_burst = true;
 		else
 			ucc->enable_burst = false;
@@ -1076,15 +1111,15 @@ triggered_bchan:
 	return true;
 }
 
-static struct dma_chan *udma_v2_of_xlate(struct of_phandle_args *dma_spec,
-					 struct of_dma *ofdma)
+static struct dma_chan *am62l_udma_of_xlate(struct of_phandle_args *dma_spec,
+				      struct of_dma *ofdma)
 {
 	struct udma_dev *ud = ofdma->of_dma_data;
 	dma_cap_mask_t mask = ud->ddev.cap_mask;
-	struct udma_v2_filter_param filter_param;
+	struct am62l_udma_filter_param filter_param;
 	struct dma_chan *chan;
 
-	if (ud->match_data->type == DMA_TYPE_BCDMA) {
+	if (ud->match_data->type == DMA_TYPE_BCDMA_V2) {
 		if (dma_spec->args_count != 4)
 			return NULL;
 
@@ -1104,7 +1139,7 @@ static struct dma_chan *udma_v2_of_xlate(struct of_phandle_args *dma_spec,
 			filter_param.asel = 0;
 	}
 
-	chan = __dma_request_channel(&mask, udma_v2_dma_filter_fn, &filter_param,
+	chan = __dma_request_channel(&mask, am62l_udma_dma_filter_fn, &filter_param,
 				     ofdma->of_node);
 	if (!chan) {
 		dev_err(ud->dev, "get channel fail in %s.\n", __func__);
@@ -1114,9 +1149,8 @@ static struct dma_chan *udma_v2_of_xlate(struct of_phandle_args *dma_spec,
 	return chan;
 }
 
-static struct udma_match_data bcdma_v2_am62l_data = {
-	.type = DMA_TYPE_BCDMA,
-	.version = K3_UDMA_V2,
+static struct udma_match_data am62l_bcdma_v2_data = {
+	.type = DMA_TYPE_BCDMA_V2,
 	.psil_base = 0x2000, /* for tchan and rchan, not applicable to bchan */
 	.enable_memcpy_support = true, /* Supported via bchan */
 	.flags = UDMA_FLAGS_J7_CLASS,
@@ -1132,9 +1166,8 @@ static struct udma_match_data bcdma_v2_am62l_data = {
 	.rchan_cnt = 128,
 };
 
-static struct udma_match_data pktdma_v2_am62l_data = {
-	.type = DMA_TYPE_PKTDMA,
-	.version = K3_UDMA_V2,
+static struct udma_match_data am62l_pktdma_v2_data = {
+	.type = DMA_TYPE_PKTDMA_V2,
 	.psil_base = 0x1000,
 	.enable_memcpy_support = false, /* PKTDMA does not support MEM_TO_MEM */
 	.flags = UDMA_FLAGS_J7_CLASS,
@@ -1154,11 +1187,11 @@ static struct udma_match_data pktdma_v2_am62l_data = {
 static const struct of_device_id udma_of_match[] = {
 	{
 		.compatible = "ti,am62l-dmss-bcdma",
-		.data = &bcdma_v2_am62l_data,
+		.data = &am62l_bcdma_v2_data,
 	},
 	{
 		.compatible = "ti,am62l-dmss-pktdma",
-		.data = &pktdma_v2_am62l_data,
+		.data = &am62l_pktdma_v2_data,
 	},
 	{ /* Sentinel */ },
 };
@@ -1169,39 +1202,39 @@ static const struct soc_device_attribute k3_soc_devices[] = {
 };
 MODULE_DEVICE_TABLE(of, udma_of_match);
 
-static int udma_v2_get_mmrs(struct platform_device *pdev, struct udma_dev *ud)
+static int am62l_udma_get_mmrs(struct platform_device *pdev, struct udma_dev *ud)
 {
 	int i;
 
-	ud->mmrs[V2_MMR_GCFG] = devm_platform_ioremap_resource_byname(pdev,
-								      v2_mmr_names[V2_MMR_GCFG]);
-	if (IS_ERR(ud->mmrs[V2_MMR_GCFG]))
-		return PTR_ERR(ud->mmrs[V2_MMR_GCFG]);
+	ud->mmrs[AM62L_MMR_GCFG] = devm_platform_ioremap_resource_byname(pdev,
+			am62l_mmr_names[AM62L_MMR_GCFG]);
+	if (IS_ERR(ud->mmrs[AM62L_MMR_GCFG]))
+		return PTR_ERR(ud->mmrs[AM62L_MMR_GCFG]);
 
 	/* There are no tchan and rchan in BCDMA_V2 and PKTDMA_V2.
 	 * Duplicate chan as tchan and rchan to keep the common code
 	 * in k3-udma-common.c functional.
 	 */
-	if (ud->match_data->type == DMA_TYPE_BCDMA) {
+	if (ud->match_data->type == DMA_TYPE_BCDMA_V2) {
 		ud->bchan_cnt = ud->match_data->bchan_cnt;
 		ud->chan_cnt = ud->match_data->chan_cnt;
 		ud->tchan_cnt = ud->match_data->chan_cnt;
 		ud->rchan_cnt = ud->match_data->chan_cnt;
 		ud->rflow_cnt = ud->chan_cnt;
-	} else if (ud->match_data->type == DMA_TYPE_PKTDMA) {
+	} else if (ud->match_data->type == DMA_TYPE_PKTDMA_V2) {
 		ud->chan_cnt = ud->match_data->chan_cnt;
 		ud->tchan_cnt = ud->match_data->tchan_cnt;
 		ud->rchan_cnt = ud->match_data->rchan_cnt;
 		ud->rflow_cnt = ud->match_data->rflow_cnt;
 	}
 
-	for (i = 1; i < V2_MMR_LAST; i++) {
-		if (i == V2_MMR_BCHANRT && ud->bchan_cnt == 0)
+	for (i = 1; i < AM62L_MMR_LAST; i++) {
+		if (i == AM62L_MMR_BCHANRT && ud->bchan_cnt == 0)
 			continue;
-		if (i == V2_MMR_CHANRT && ud->chan_cnt == 0)
+		if (i == AM62L_MMR_CHANRT && ud->chan_cnt == 0)
 			continue;
 
-		ud->mmrs[i] = devm_platform_ioremap_resource_byname(pdev, v2_mmr_names[i]);
+		ud->mmrs[i] = devm_platform_ioremap_resource_byname(pdev, am62l_mmr_names[i]);
 		if (IS_ERR(ud->mmrs[i]))
 			return PTR_ERR(ud->mmrs[i]);
 	}
@@ -1209,13 +1242,14 @@ static int udma_v2_get_mmrs(struct platform_device *pdev, struct udma_dev *ud)
 	return 0;
 }
 
-static int udma_v2_probe(struct platform_device *pdev)
+static int am62l_udma_probe(struct platform_device *pdev)
 {
 	const struct soc_device_attribute *soc;
 	struct device *dev = &pdev->dev;
-	const struct of_device_id *match;
 	struct udma_dev *ud;
-	int ch_count, i, ret;
+	const struct of_device_id *match;
+	int i, ret;
+	int ch_count;
 
 	ret = dma_coerce_mask_and_coherent(dev, DMA_BIT_MASK(48));
 	if (ret)
@@ -1242,22 +1276,21 @@ static int udma_v2_probe(struct platform_device *pdev)
 		ud->soc_data = soc->data;
 	}
 	// Setup function pointers
-	ud->start = udma_v2_start;
-	ud->stop = udma_v2_stop;
-	ud->reset_chan = udma_v2_reset_chan;
-	ud->decrement_byte_counters = udma_v2_decrement_byte_counters;
-	ud->bcdma_setup_sci_resources = NULL;
-	ud->pktdma_setup_sci_resources = NULL;
+	ud->udma_start = am62l_udma_start;
+	ud->udma_stop = am62l_udma_stop;
+	ud->udma_reset_chan = am62l_udma_reset_chan;
+	ud->udma_is_desc_really_done = am62l_udma_is_desc_really_done;
+	ud->udma_decrement_byte_counters = am62l_udma_decrement_byte_counters;
 
-	ret = udma_v2_get_mmrs(pdev, ud);
+	ret = am62l_udma_get_mmrs(pdev, ud);
 	if (ret)
 		return ret;
 
 	struct k3_ringacc_init_data ring_init_data = {0};
 
-	if (ud->match_data->type == DMA_TYPE_BCDMA) {
+	if (ud->match_data->type == DMA_TYPE_BCDMA_V2) {
 		ring_init_data.num_rings = ud->bchan_cnt + ud->chan_cnt;
-	} else if (ud->match_data->type == DMA_TYPE_PKTDMA) {
+	} else if (ud->match_data->type == DMA_TYPE_PKTDMA_V2) {
 		ring_init_data.num_rings = ud->rflow_cnt;
 
 		ud->rflow_rt = devm_platform_ioremap_resource_byname(pdev, "ringrt");
@@ -1271,7 +1304,7 @@ static int udma_v2_probe(struct platform_device *pdev)
 
 	dma_cap_set(DMA_SLAVE, ud->ddev.cap_mask);
 
-	if (ud->match_data->type != DMA_TYPE_PKTDMA) {
+	if (ud->match_data->type != DMA_TYPE_PKTDMA_V2) {
 		dma_cap_set(DMA_CYCLIC, ud->ddev.cap_mask);
 		ud->ddev.device_prep_dma_cyclic = udma_prep_dma_cyclic;
 	}
@@ -1279,9 +1312,9 @@ static int udma_v2_probe(struct platform_device *pdev)
 	ud->ddev.device_config = udma_slave_config;
 	ud->ddev.device_prep_slave_sg = udma_prep_slave_sg;
 	ud->ddev.device_issue_pending = udma_issue_pending;
-	ud->ddev.device_tx_status = udma_v2_tx_status;
-	ud->ddev.device_pause = udma_v2_pause;
-	ud->ddev.device_resume = udma_v2_resume;
+	ud->ddev.device_tx_status = am62l_udma_tx_status;
+	ud->ddev.device_pause = am62l_udma_pause;
+	ud->ddev.device_resume = am62l_udma_resume;
 	ud->ddev.device_terminate_all = udma_terminate_all;
 	ud->ddev.device_synchronize = udma_synchronize;
 #ifdef CONFIG_DEBUG_FS
@@ -1289,13 +1322,13 @@ static int udma_v2_probe(struct platform_device *pdev)
 #endif
 
 	switch (ud->match_data->type) {
-	case DMA_TYPE_BCDMA:
+	case DMA_TYPE_BCDMA_V2:
 		ud->ddev.device_alloc_chan_resources =
-			bcdma_v2_alloc_chan_resources;
+			am62l_bcdma_v2_alloc_chan_resources;
 		break;
-	case DMA_TYPE_PKTDMA:
+	case DMA_TYPE_PKTDMA_V2:
 		ud->ddev.device_alloc_chan_resources =
-			pktdma_v2_alloc_chan_resources;
+			am62l_pktdma_v2_alloc_chan_resources;
 		break;
 	default:
 		return -EINVAL;
@@ -1342,21 +1375,21 @@ static int udma_v2_probe(struct platform_device *pdev)
 		struct udma_bchan *bchan = &ud->bchans[i];
 
 		bchan->id = i;
-		bchan->reg_rt = ud->mmrs[V2_MMR_BCHANRT] + i * 0x1000;
+		bchan->reg_rt = ud->mmrs[AM62L_MMR_BCHANRT] + i * 0x1000;
 	}
 
 	for (i = 0; i < ud->tchan_cnt; i++) {
 		struct udma_tchan *tchan = &ud->tchans[i];
 
 		tchan->id = i;
-		tchan->reg_rt = ud->mmrs[V2_MMR_CHANRT] + i * 0x1000;
+		tchan->reg_rt = ud->mmrs[AM62L_MMR_CHANRT] + i * 0x1000;
 	}
 
 	for (i = 0; i < ud->rchan_cnt; i++) {
 		struct udma_rchan *rchan = &ud->rchans[i];
 
 		rchan->id = i;
-		rchan->reg_rt = ud->mmrs[V2_MMR_CHANRT] + i * 0x1000;
+		rchan->reg_rt = ud->mmrs[AM62L_MMR_CHANRT] + i * 0x1000;
 	}
 
 	for (i = 0; i < ud->rflow_cnt; i++) {
@@ -1400,7 +1433,7 @@ static int udma_v2_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, ud);
 
-	ret = of_dma_controller_register(dev->of_node, udma_v2_of_xlate, ud);
+	ret = of_dma_controller_register(dev->of_node, am62l_udma_of_xlate, ud);
 	if (ret) {
 		dev_err(dev, "failed to register of_dma controller\n");
 		dma_async_device_unregister(&ud->ddev);
@@ -1409,7 +1442,7 @@ static int udma_v2_probe(struct platform_device *pdev)
 	return ret;
 }
 
-static int __maybe_unused udma_v2_pm_suspend(struct device *dev)
+static int __maybe_unused am62l_udma_pm_suspend(struct device *dev)
 {
 	struct udma_dev *ud = dev_get_drvdata(dev);
 	struct dma_device *dma_dev = &ud->ddev;
@@ -1431,7 +1464,7 @@ static int __maybe_unused udma_v2_pm_suspend(struct device *dev)
 	return 0;
 }
 
-static int __maybe_unused udma_v2_pm_resume(struct device *dev)
+static int __maybe_unused am62l_udma_pm_resume(struct device *dev)
 {
 	struct udma_dev *ud = dev_get_drvdata(dev);
 	struct dma_device *dma_dev = &ud->ddev;
@@ -1457,19 +1490,20 @@ static int __maybe_unused udma_v2_pm_resume(struct device *dev)
 }
 
 static const struct dev_pm_ops udma_pm_ops = {
-	SET_LATE_SYSTEM_SLEEP_PM_OPS(udma_v2_pm_suspend, udma_v2_pm_resume)
+	SET_LATE_SYSTEM_SLEEP_PM_OPS(am62l_udma_pm_suspend, am62l_udma_pm_resume)
 };
 
-static struct platform_driver bcdma_v2_driver = {
+static struct platform_driver am62l_bcdma_v2_driver = {
 	.driver = {
-		.name	= "ti-udma-v2",
+		.name	= "ti-udma-am62l",
 		.of_match_table = udma_of_match,
 		.suppress_bind_attrs = true,
 		.pm = &udma_pm_ops,
 	},
-	.probe		= udma_v2_probe,
+	.probe		= am62l_udma_probe,
 };
 
-module_platform_driver(bcdma_v2_driver);
-MODULE_DESCRIPTION("Texas Instruments K3 UDMA v2 support");
+module_platform_driver(am62l_bcdma_v2_driver);
+MODULE_DESCRIPTION("Texas Instruments K3 AM62L UDMA support");
 MODULE_LICENSE("GPL");
+

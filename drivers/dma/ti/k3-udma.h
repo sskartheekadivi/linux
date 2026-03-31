@@ -6,8 +6,29 @@
 #ifndef K3_UDMA_H_
 #define K3_UDMA_H_
 
+#include <linux/kernel.h>
+#include <linux/module.h>
+#include <linux/delay.h>
 #include <linux/dmaengine.h>
+#include <linux/dma-mapping.h>
+#include <linux/dmapool.h>
+#include <linux/err.h>
+#include <linux/init.h>
+#include <linux/interrupt.h>
+#include <linux/list.h>
+#include <linux/platform_device.h>
+#include <linux/slab.h>
+#include <linux/spinlock.h>
+#include <linux/sys_soc.h>
+#include <linux/of.h>
+#include <linux/of_dma.h>
+#include <linux/of_irq.h>
+#include <linux/workqueue.h>
+#include <linux/completion.h>
+#include <linux/soc/ti/k3-ringacc.h>
 #include <linux/soc/ti/ti_sci_protocol.h>
+#include <linux/soc/ti/ti_sci_inta_msi.h>
+#include <linux/dma/k3-event-router.h>
 #include <linux/dma/ti-cppi5.h>
 
 #include "../virt-dma.h"
@@ -31,9 +52,6 @@
 #define UDMA_CHAN_RT_SWTRIG_REG		0x8
 #define UDMA_CHAN_RT_STDATA_REG		0x80
 
-#define UDMA_CHAN_RT_STATIC_TR_XY_REG	0x800
-#define UDMA_CHAN_RT_STATIC_TR_Z_REG	0x804
-#define UDMA_CHAN_RT_PERIPH_BCNT_REG	0x810
 #define UDMA_CHAN_RT_PDMA_STATE_REG		0x80c
 
 #define UDMA_CHAN_RT_PEER_REG(i)	(0x200 + ((i) * 0x4))
@@ -136,6 +154,7 @@
 #define UDMA_RFLOW_DSTTAG_DST_TAG_LO	4
 #define UDMA_RFLOW_DSTTAG_DST_TAG_HI	5
 
+/* Device capability flags */
 #define UDMA_FLAG_PDMA_ACC32		BIT(0)
 #define UDMA_FLAG_PDMA_BURST		BIT(1)
 #define UDMA_FLAG_TDTYPE		BIT(2)
@@ -151,81 +170,15 @@
 				 BIT(DMA_SLAVE_BUSWIDTH_4_BYTES) | \
 				 BIT(DMA_SLAVE_BUSWIDTH_8_BYTES))
 
-/* TI_SCI Params */
-#define TISCI_BCDMA_BCHAN_VALID_PARAMS (			\
-	TI_SCI_MSG_VALUE_RM_UDMAP_CH_PAUSE_ON_ERR_VALID |	\
-	TI_SCI_MSG_VALUE_RM_UDMAP_CH_EXTENDED_CH_TYPE_VALID)
-
-#define TISCI_BCDMA_TCHAN_VALID_PARAMS (			\
-	TI_SCI_MSG_VALUE_RM_UDMAP_CH_PAUSE_ON_ERR_VALID |	\
-	TI_SCI_MSG_VALUE_RM_UDMAP_CH_TX_SUPR_TDPKT_VALID)
-
-#define TISCI_BCDMA_RCHAN_VALID_PARAMS (			\
-	TI_SCI_MSG_VALUE_RM_UDMAP_CH_PAUSE_ON_ERR_VALID)
-
-#define TISCI_UDMA_TCHAN_VALID_PARAMS (				\
-	TI_SCI_MSG_VALUE_RM_UDMAP_CH_PAUSE_ON_ERR_VALID |	\
-	TI_SCI_MSG_VALUE_RM_UDMAP_CH_TX_FILT_EINFO_VALID |	\
-	TI_SCI_MSG_VALUE_RM_UDMAP_CH_TX_FILT_PSWORDS_VALID |	\
-	TI_SCI_MSG_VALUE_RM_UDMAP_CH_CHAN_TYPE_VALID |		\
-	TI_SCI_MSG_VALUE_RM_UDMAP_CH_TX_SUPR_TDPKT_VALID |	\
-	TI_SCI_MSG_VALUE_RM_UDMAP_CH_FETCH_SIZE_VALID |		\
-	TI_SCI_MSG_VALUE_RM_UDMAP_CH_CQ_QNUM_VALID |		\
-	TI_SCI_MSG_VALUE_RM_UDMAP_CH_ATYPE_VALID)
-
-#define TISCI_UDMA_RCHAN_VALID_PARAMS (				\
-	TI_SCI_MSG_VALUE_RM_UDMAP_CH_PAUSE_ON_ERR_VALID |	\
-	TI_SCI_MSG_VALUE_RM_UDMAP_CH_FETCH_SIZE_VALID |		\
-	TI_SCI_MSG_VALUE_RM_UDMAP_CH_CQ_QNUM_VALID |		\
-	TI_SCI_MSG_VALUE_RM_UDMAP_CH_CHAN_TYPE_VALID |		\
-	TI_SCI_MSG_VALUE_RM_UDMAP_CH_RX_IGNORE_SHORT_VALID |	\
-	TI_SCI_MSG_VALUE_RM_UDMAP_CH_RX_IGNORE_LONG_VALID |	\
-	TI_SCI_MSG_VALUE_RM_UDMAP_CH_RX_FLOWID_START_VALID |	\
-	TI_SCI_MSG_VALUE_RM_UDMAP_CH_RX_FLOWID_CNT_VALID |	\
-	TI_SCI_MSG_VALUE_RM_UDMAP_CH_ATYPE_VALID)
-
-struct udma_dev;
-struct udma_tchan;
-struct udma_rchan;
-struct udma_rflow;
 struct udma_chan;
-
-enum udma_rm_range {
-	RM_RANGE_BCHAN = 0,
-	RM_RANGE_TCHAN,
-	RM_RANGE_RCHAN,
-	RM_RANGE_RFLOW,
-	RM_RANGE_TFLOW,
-	RM_RANGE_LAST,
-};
-
-struct udma_tisci_rm {
-	const struct ti_sci_handle *tisci;
-	const struct ti_sci_rm_udmap_ops *tisci_udmap_ops;
-	u32  tisci_dev_id;
-
-	/* tisci information for PSI-L thread pairing/unpairing */
-	const struct ti_sci_rm_psil_ops *tisci_psil_ops;
-	u32  tisci_navss_dev_id;
-
-	struct ti_sci_resource *rm_ranges[RM_RANGE_LAST];
-};
-
-struct udma_static_tr {
-	u8 elsize; /* RPSTR0 */
-	u16 elcnt; /* RPSTR0 */
-	u16 bstcnt; /* RPSTR1 */
-};
+struct udma_dev;
 
 enum k3_dma_type {
 	DMA_TYPE_UDMA = 0,
 	DMA_TYPE_BCDMA,
 	DMA_TYPE_PKTDMA,
-};
-
-enum k3_dma_version {
-	K3_UDMA_V1 = 0,
-	K3_UDMA_V2,
+	DMA_TYPE_BCDMA_V2,
+	DMA_TYPE_PKTDMA_V2,
 };
 
 enum udma_mmr {
@@ -236,11 +189,26 @@ enum udma_mmr {
 	MMR_LAST,
 };
 
-enum udma_v2_mmr {
-	V2_MMR_GCFG = 0,
-	V2_MMR_BCHANRT,
-	V2_MMR_CHANRT,
-	V2_MMR_LAST,
+enum am62l_udma_mmr {
+	AM62L_MMR_GCFG = 0,
+	AM62L_MMR_BCHANRT,
+	AM62L_MMR_CHANRT,
+	AM62L_MMR_LAST,
+};
+
+enum udma_rm_range {
+	RM_RANGE_BCHAN = 0,
+	RM_RANGE_TCHAN,
+	RM_RANGE_RCHAN,
+	RM_RANGE_RFLOW,
+	RM_RANGE_TFLOW,
+	RM_RANGE_LAST,
+};
+
+enum udma_chan_state {
+	UDMA_CHAN_IS_IDLE = 0, /* not active, no teardown is in progress */
+	UDMA_CHAN_IS_ACTIVE, /* Normal operation */
+	UDMA_CHAN_IS_TERMINATING, /* channel is being terminated */
 };
 
 struct udma_filter_param {
@@ -250,11 +218,17 @@ struct udma_filter_param {
 	u32 tr_trigger_type;
 };
 
-struct udma_v2_filter_param {
+struct am62l_udma_filter_param {
 	u32 tr_trigger_type;
 	u32 trigger_param;
 	int remote_thread_id;
 	u32 asel;
+};
+
+struct udma_static_tr {
+	u8 elsize; /* RPSTR0 */
+	u16 elcnt; /* RPSTR0 */
+	u16 bstcnt; /* RPSTR1 */
 };
 
 struct udma_tchan {
@@ -264,7 +238,6 @@ struct udma_tchan {
 	struct k3_ring *t_ring; /* Transmit ring */
 	struct k3_ring *tc_ring; /* Transmit Completion ring */
 	int tflow_id; /* applicable only for PKTDMA */
-
 };
 
 #define udma_bchan udma_tchan
@@ -294,9 +267,22 @@ struct udma_oes_offsets {
 	u32 pktdma_rchan_flow;
 };
 
+
+struct udma_tisci_rm {
+	const struct ti_sci_handle *tisci;
+	const struct ti_sci_rm_udmap_ops *tisci_udmap_ops;
+	u32  tisci_dev_id;
+
+	/* tisci information for PSI-L thread pairing/unpairing */
+	const struct ti_sci_rm_psil_ops *tisci_psil_ops;
+	u32  tisci_navss_dev_id;
+
+	struct ti_sci_resource *rm_ranges[RM_RANGE_LAST];
+};
+
+
 struct udma_match_data {
 	enum k3_dma_type type;
-	enum k3_dma_version version;
 	u32 psil_base;
 	bool enable_memcpy_support;
 	u32 flags;
@@ -337,6 +323,61 @@ struct udma_rx_flush {
 struct udma_tpl {
 	u8 levels;
 	u32 start_idx[3];
+};
+
+struct udma_desc {
+	struct virt_dma_desc vd;
+
+	bool terminated;
+
+	enum dma_transfer_direction dir;
+
+	struct udma_static_tr static_tr;
+	u32 residue;
+
+	unsigned int sglen;
+	unsigned int desc_idx; /* Only used for cyclic in packet mode */
+	unsigned int tr_idx;
+
+	u32 metadata_size;
+	void *metadata; /* pointer to provided metadata buffer (EPIP, PSdata) */
+
+	unsigned int hwdesc_count;
+	struct udma_hwdesc hwdesc[];
+};
+
+struct udma_tx_drain {
+	struct delayed_work work;
+	ktime_t tstamp;
+	u32 residue;
+};
+
+struct udma_chan_config {
+	bool pkt_mode; /* TR or packet */
+	bool needs_epib; /* EPIB is needed for the communication or not */
+	u32 psd_size; /* size of Protocol Specific Data */
+	u32 metadata_size; /* (needs_epib ? 16:0) + psd_size */
+	u32 hdesc_size; /* Size of a packet descriptor in packet mode */
+	bool notdpkt; /* Suppress sending TDC packet */
+	int remote_thread_id;
+	u32 atype;
+	u32 asel;
+	u32 src_thread;
+	u32 dst_thread;
+	enum psil_endpoint_type ep_type;
+	bool enable_acc32;
+	bool enable_burst;
+	enum udma_tp_level channel_tpl; /* Channel Throughput Level */
+
+	u32 tr_trigger_type;
+	unsigned long tx_flags;
+
+	/* PKDMA mapped channel */
+	int mapped_channel_id;
+	/* PKTDMA default tflow or rflow for mapped channel */
+	int default_flow_id;
+
+	enum dma_transfer_direction dir;
 };
 
 struct udma_dev {
@@ -390,78 +431,11 @@ struct udma_dev {
 	u32 atype;
 	u32 asel;
 
-	int (*start)(struct udma_chan *uc);
-	int (*stop)(struct udma_chan *uc);
-	int (*reset_chan)(struct udma_chan *uc, bool hard);
-	void (*decrement_byte_counters)(struct udma_chan *uc, u32 val);
-	int (*psil_pair)(struct udma_dev *ud, u32 src_thread,
-			 u32 dst_thread);
-	int (*psil_unpair)(struct udma_dev *ud, u32 src_thread,
-			   u32 dst_thread);
-	int (*udma_setup_resources)(struct udma_dev *ud);
-	int (*bcdma_setup_sci_resources)(struct udma_dev *ud);
-	int (*pktdma_setup_sci_resources)(struct udma_dev *ud);
-};
-
-struct udma_desc {
-	struct virt_dma_desc vd;
-
-	bool terminated;
-
-	enum dma_transfer_direction dir;
-
-	struct udma_static_tr static_tr;
-	u32 residue;
-
-	unsigned int sglen;
-	unsigned int desc_idx; /* Only used for cyclic in packet mode */
-	unsigned int tr_idx;
-
-	u32 metadata_size;
-	void *metadata; /* pointer to provided metadata buffer (EPIP, PSdata) */
-
-	unsigned int hwdesc_count;
-	struct udma_hwdesc hwdesc[];
-};
-
-enum udma_chan_state {
-	UDMA_CHAN_IS_IDLE = 0, /* not active, no teardown is in progress */
-	UDMA_CHAN_IS_ACTIVE, /* Normal operation */
-	UDMA_CHAN_IS_TERMINATING, /* channel is being terminated */
-};
-
-struct udma_tx_drain {
-	struct delayed_work work;
-	ktime_t tstamp;
-	u32 residue;
-};
-
-struct udma_chan_config {
-	bool pkt_mode; /* TR or packet */
-	bool needs_epib; /* EPIB is needed for the communication or not */
-	u32 psd_size; /* size of Protocol Specific Data */
-	u32 metadata_size; /* (needs_epib ? 16:0) + psd_size */
-	u32 hdesc_size; /* Size of a packet descriptor in packet mode */
-	bool notdpkt; /* Suppress sending TDC packet */
-	int remote_thread_id;
-	u32 atype;
-	u32 asel;
-	u32 src_thread;
-	u32 dst_thread;
-	enum psil_endpoint_type ep_type;
-	bool enable_acc32;
-	bool enable_burst;
-	enum udma_tp_level channel_tpl; /* Channel Throughput Level */
-
-	u32 tr_trigger_type;
-	unsigned long tx_flags;
-
-	/* PKDMA mapped channel */
-	int mapped_channel_id;
-	/* PKTDMA default tflow or rflow for mapped channel */
-	int default_flow_id;
-
-	enum dma_transfer_direction dir;
+	int (*udma_start)(struct udma_chan *uc);
+	int (*udma_stop)(struct udma_chan *uc);
+	int (*udma_reset_chan)(struct udma_chan *uc, bool hard);
+	bool (*udma_is_desc_really_done)(struct udma_chan *uc, struct udma_desc *d);
+	void (*udma_decrement_byte_counters)(struct udma_chan *uc, u32 val);
 };
 
 struct udma_chan {
@@ -596,120 +570,123 @@ static inline void udma_fetch_epib(struct udma_chan *uc, struct udma_desc *d)
 	memcpy(d->metadata, h_desc->epib, d->metadata_size);
 }
 
-/* Common functions */
-struct udma_desc *udma_udma_desc_from_paddr(struct udma_chan *uc,
-					    dma_addr_t paddr);
-void udma_free_hwdesc(struct udma_chan *uc, struct udma_desc *d);
-void udma_purge_desc_work(struct work_struct *work);
-void udma_desc_free(struct virt_dma_desc *vd);
-bool udma_desc_is_rx_flush(struct udma_chan *uc, dma_addr_t addr);
-bool udma_is_desc_really_done(struct udma_chan *uc, struct udma_desc *d);
-struct udma_desc *udma_alloc_tr_desc(struct udma_chan *uc,
-				     size_t tr_size, int tr_count,
-				     enum dma_transfer_direction dir);
-int udma_get_tr_counters(struct udma_chan *uc, size_t len, unsigned long align_to, u16 *tr0_cnt0,
-			 u16 *tr0_cnt1, u16 *tr1_cnt0);
-struct udma_desc *udma_prep_slave_sg_tr(struct udma_chan *uc,
-					struct scatterlist *sgl, unsigned int sglen,
-					enum dma_transfer_direction dir,
-					unsigned long tx_flags, void *context);
-struct udma_desc *udma_prep_slave_sg_triggered_tr(struct udma_chan *uc,
-						  struct scatterlist *sgl, unsigned int sglen,
-						  enum dma_transfer_direction dir,
-						  unsigned long tx_flags, void *context);
-int udma_configure_statictr(struct udma_chan *uc, struct udma_desc *d,
-			    enum dma_slave_buswidth dev_width, u16 elcnt);
-struct udma_desc *udma_prep_slave_sg_pkt(struct udma_chan *uc,
-					 struct scatterlist *sgl, unsigned int sglen,
-					 enum dma_transfer_direction dir,
-					 unsigned long tx_flags, void *context);
-int udma_attach_metadata(struct dma_async_tx_descriptor *desc,
-			 void *data, size_t len);
-void *udma_get_metadata_ptr(struct dma_async_tx_descriptor *desc,
-			    size_t *payload_len, size_t *max_len);
-int udma_set_metadata_len(struct dma_async_tx_descriptor *desc,
-			  size_t payload_len);
-struct dma_async_tx_descriptor *udma_prep_slave_sg(struct dma_chan *chan,
-						   struct scatterlist *sgl, unsigned int sglen,
-						   enum dma_transfer_direction dir,
-						   unsigned long tx_flags, void *context);
-struct udma_desc *udma_prep_dma_cyclic_tr(struct udma_chan *uc,
-					  dma_addr_t buf_addr, size_t buf_len, size_t period_len,
-					  enum dma_transfer_direction dir, unsigned long flags);
-struct udma_desc *udma_prep_dma_cyclic_pkt(struct udma_chan *uc,
-					   dma_addr_t buf_addr, size_t buf_len, size_t period_len,
-					   enum dma_transfer_direction dir, unsigned long flags);
-struct dma_async_tx_descriptor *udma_prep_dma_cyclic(struct dma_chan *chan, dma_addr_t buf_addr,
-						     size_t buf_len, size_t period_len,
-						     enum dma_transfer_direction dir,
-						     unsigned long flags);
-struct dma_async_tx_descriptor *udma_prep_dma_memcpy(struct dma_chan *chan,
-						     dma_addr_t dest, dma_addr_t src,
-						     size_t len, unsigned long tx_flags);
-void udma_desc_pre_callback(struct virt_dma_chan *vc,
-			    struct virt_dma_desc *vd,
-			    struct dmaengine_result *result);
-
-int udma_push_to_ring(struct udma_chan *uc, int idx);
-int udma_pop_from_ring(struct udma_chan *uc, dma_addr_t *addr);
-void udma_reset_rings(struct udma_chan *uc);
-
-int navss_psil_pair(struct udma_dev *ud, u32 src_thread, u32 dst_thread);
-int navss_psil_unpair(struct udma_dev *ud, u32 src_thread, u32 dst_thread);
 void udma_start_desc(struct udma_chan *uc);
-u8 udma_get_chan_tpl_index(struct udma_tpl *tpl_map, int chan_id);
-void k3_configure_chan_coherency(struct dma_chan *chan, u32 asel);
-void udma_reset_uchan(struct udma_chan *uc);
-void udma_dump_chan_stdata(struct udma_chan *uc);
-bool udma_is_chan_running(struct udma_chan *uc);
-
 bool udma_chan_needs_reconfiguration(struct udma_chan *uc);
 void udma_cyclic_packet_elapsed(struct udma_chan *uc);
 void udma_check_tx_completion(struct work_struct *work);
-int udma_slave_config(struct dma_chan *chan,
-		      struct dma_slave_config *cfg);
 void udma_issue_pending(struct dma_chan *chan);
-int udma_terminate_all(struct dma_chan *chan);
-void udma_synchronize(struct dma_chan *chan);
-void udma_vchan_complete(struct tasklet_struct *t);
+void udma_free_chan_resources(struct dma_chan *chan);
+int setup_resources(struct udma_dev *ud);
 void udma_mark_resource_ranges(struct udma_dev *ud, unsigned long *map,
-			       struct ti_sci_resource_desc *rm_desc,
-			       char *name);
-int udma_setup_rx_flush(struct udma_dev *ud);
-enum dmaengine_alignment udma_get_copy_align(struct udma_dev *ud);
+			    struct ti_sci_resource_desc *rm_desc,
+			    char *name);
+int udma_setup_resources(struct udma_dev *ud);
+int bcdma_setup_resources(struct udma_dev *ud);
+int pktdma_setup_resources(struct udma_dev *ud);
 
-#ifdef CONFIG_DEBUG_FS
-void udma_dbg_summary_show_chan(struct seq_file *s,
-				struct dma_chan *chan);
-void udma_dbg_summary_show(struct seq_file *s,
-			   struct dma_device *dma_dev);
-#endif /* CONFIG_DEBUG_FS */
+void k3_configure_chan_coherency(struct dma_chan *chan, u32 asel);
+u8 udma_get_chan_tpl_index(struct udma_tpl *tpl_map, int chan_id);
+void udma_reset_uchan(struct udma_chan *uc);
+void udma_dump_chan_stdata(struct udma_chan *uc);
+struct udma_desc *udma_udma_desc_from_paddr(struct udma_chan *uc,
+				   dma_addr_t paddr);
+void udma_free_hwdesc(struct udma_chan *uc, struct udma_desc *d);
+void udma_purge_desc_work(struct work_struct *work);
+void udma_desc_free(struct virt_dma_desc *vd);
+bool udma_is_chan_running(struct udma_chan *uc);
+void udma_reset_rings(struct udma_chan *uc);
+int udma_push_to_ring(struct udma_chan *uc, int idx);
+bool udma_desc_is_rx_flush(struct udma_chan *uc, dma_addr_t addr);
+int udma_pop_from_ring(struct udma_chan *uc, dma_addr_t *addr);
 
 int __udma_alloc_gp_rflow_range(struct udma_dev *ud, int from, int cnt);
 int __udma_free_gp_rflow_range(struct udma_dev *ud, int from, int cnt);
 struct udma_rflow *__udma_get_rflow(struct udma_dev *ud, int id);
 void __udma_put_rflow(struct udma_dev *ud, struct udma_rflow *rflow);
-int udma_get_tchan(struct udma_chan *uc);
-int udma_get_rchan(struct udma_chan *uc);
-int udma_get_chan_pair(struct udma_chan *uc);
-int udma_get_rflow(struct udma_chan *uc, int flow_id);
-void udma_put_rchan(struct udma_chan *uc);
-void udma_put_tchan(struct udma_chan *uc);
-void udma_put_rflow(struct udma_chan *uc);
-void udma_free_tx_resources(struct udma_chan *uc);
-void udma_free_rx_resources(struct udma_chan *uc);
-void udma_free_chan_resources(struct dma_chan *chan);
-void bcdma_put_bchan(struct udma_chan *uc);
-void bcdma_free_bchan_resources(struct udma_chan *uc);
 
 struct udma_bchan *__udma_reserve_bchan(struct udma_dev *ud, enum udma_tp_level tpl, int id);
 struct udma_tchan *__udma_reserve_tchan(struct udma_dev *ud, enum udma_tp_level tpl, int id);
 struct udma_rchan *__udma_reserve_rchan(struct udma_dev *ud, enum udma_tp_level tpl, int id);
 
-int udma_setup_resources(struct udma_dev *ud);
-int bcdma_setup_resources(struct udma_dev *ud);
-int pktdma_setup_resources(struct udma_dev *ud);
-int setup_resources(struct udma_dev *ud);
+int udma_get_tchan(struct udma_chan *uc);
+int udma_get_rchan(struct udma_chan *uc);
+int udma_get_chan_pair(struct udma_chan *uc);
+int udma_get_rflow(struct udma_chan *uc, int flow_id);
+void bcdma_put_bchan(struct udma_chan *uc);
+void udma_put_rchan(struct udma_chan *uc);
+void udma_put_tchan(struct udma_chan *uc);
+void udma_put_rflow(struct udma_chan *uc);
+void bcdma_free_bchan_resources(struct udma_chan *uc);
+void udma_free_tx_resources(struct udma_chan *uc);
+void udma_free_rx_resources(struct udma_chan *uc);
+int udma_slave_config(struct dma_chan *chan,
+	     struct dma_slave_config *cfg);
+struct udma_desc *udma_alloc_tr_desc(struct udma_chan *uc,
+			    size_t tr_size, int tr_count,
+			    enum dma_transfer_direction dir);
+int udma_get_tr_counters(struct udma_chan *uc, size_t len, unsigned long align_to, u16 *tr0_cnt0,
+			 u16 *tr0_cnt1, u16 *tr1_cnt0);
+struct udma_desc *
+udma_prep_slave_sg_tr(struct udma_chan *uc, struct scatterlist *sgl,
+		      unsigned int sglen, enum dma_transfer_direction dir,
+		      unsigned long tx_flags, void *context);
+struct udma_desc *
+udma_prep_slave_sg_triggered_tr(struct udma_chan *uc, struct scatterlist *sgl,
+				unsigned int sglen,
+				enum dma_transfer_direction dir,
+				unsigned long tx_flags, void *context);
+int udma_configure_statictr(struct udma_chan *uc, struct udma_desc *d,
+				   enum dma_slave_buswidth dev_width,
+				   u16 elcnt);
+struct udma_desc *
+udma_prep_slave_sg_pkt(struct udma_chan *uc, struct scatterlist *sgl,
+		       unsigned int sglen, enum dma_transfer_direction dir,
+		       unsigned long tx_flags, void *context);
+int udma_attach_metadata(struct dma_async_tx_descriptor *desc,
+				void *data, size_t len);
+void *udma_get_metadata_ptr(struct dma_async_tx_descriptor *desc,
+				   size_t *payload_len, size_t *max_len);
+int udma_set_metadata_len(struct dma_async_tx_descriptor *desc,
+				 size_t payload_len);
+struct dma_async_tx_descriptor *
+udma_prep_slave_sg(struct dma_chan *chan, struct scatterlist *sgl,
+		   unsigned int sglen, enum dma_transfer_direction dir,
+		   unsigned long tx_flags, void *context);
+struct udma_desc *
+udma_prep_dma_cyclic_tr(struct udma_chan *uc, dma_addr_t buf_addr,
+			size_t buf_len, size_t period_len,
+			enum dma_transfer_direction dir, unsigned long flags);
+struct udma_desc *
+udma_prep_dma_cyclic_pkt(struct udma_chan *uc, dma_addr_t buf_addr,
+			 size_t buf_len, size_t period_len,
+			 enum dma_transfer_direction dir, unsigned long flags);
+struct dma_async_tx_descriptor *
+udma_prep_dma_cyclic(struct dma_chan *chan, dma_addr_t buf_addr, size_t buf_len,
+		     size_t period_len, enum dma_transfer_direction dir,
+		     unsigned long flags);
+struct dma_async_tx_descriptor *
+udma_prep_dma_memcpy(struct dma_chan *chan, dma_addr_t dest, dma_addr_t src,
+		     size_t len, unsigned long tx_flags);
+int udma_terminate_all(struct dma_chan *chan);
+void udma_synchronize(struct dma_chan *chan);
+void udma_desc_pre_callback(struct virt_dma_chan *vc,
+		   struct virt_dma_desc *vd,
+		   struct dmaengine_result *result);
+
+void udma_vchan_complete(struct tasklet_struct *t);
+int udma_setup_rx_flush(struct udma_dev *ud);
+
+#ifdef CONFIG_DEBUG_FS
+void udma_dbg_summary_show_chan(struct seq_file *s,
+				       struct dma_chan *chan);
+void udma_dbg_summary_show(struct seq_file *s,
+				  struct dma_device *dma_dev);
+#endif /* CONFIG_DEBUG_FS */
+
+enum dmaengine_alignment udma_get_copy_align(struct udma_dev *ud);
+int navss_psil_pair(struct udma_dev *ud, u32 src_thread, u32 dst_thread);
+int navss_psil_unpair(struct udma_dev *ud, u32 src_thread,
+	     u32 dst_thread);
 
 /* Direct access to UDMA low lever resources for the glue layer */
 int xudma_navss_psil_pair(struct udma_dev *ud, u32 src_thread, u32 dst_thread);
