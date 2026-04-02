@@ -12,8 +12,8 @@
 
 int xudma_navss_psil_pair(struct udma_dev *ud, u32 src_thread, u32 dst_thread)
 {
-	if (IS_ENABLED(CONFIG_TI_K3_UDMA))
-		return navss_psil_pair(ud, src_thread, dst_thread);
+	if (ud->psil_pair)
+		return ud->psil_pair(ud, src_thread, dst_thread);
 
 	return 0;
 }
@@ -21,8 +21,8 @@ EXPORT_SYMBOL(xudma_navss_psil_pair);
 
 int xudma_navss_psil_unpair(struct udma_dev *ud, u32 src_thread, u32 dst_thread)
 {
-	if (IS_ENABLED(CONFIG_TI_K3_UDMA))
-		return navss_psil_unpair(ud, src_thread, dst_thread);
+	if (ud->psil_unpair)
+		return ud->psil_unpair(ud, src_thread, dst_thread);
 
 	return 0;
 }
@@ -52,9 +52,9 @@ struct udma_dev *of_xudma_dev_get(struct device_node *np, const char *property)
 	}
 
 	ud = platform_get_drvdata(pdev);
+	put_device(&pdev->dev);
 	if (!ud) {
 		pr_debug("UDMA has not been probed\n");
-		put_device(&pdev->dev);
 		return ERR_PTR(-EPROBE_DEFER);
 	}
 
@@ -173,14 +173,13 @@ XUDMA_RT_IO_FUNCTIONS(rflow);
 
 int xudma_is_pktdma(struct udma_dev *ud)
 {
-	return (ud->match_data->type == DMA_TYPE_PKTDMA ||
-			ud->match_data->type == DMA_TYPE_PKTDMA_V2);
+	return ud->match_data->type == DMA_TYPE_PKTDMA;
 }
 EXPORT_SYMBOL(xudma_is_pktdma);
 
 int xudma_pktdma_tflow_get_irq(struct udma_dev *ud, int udma_tflow_id)
 {
-	if (ud->match_data->type == DMA_TYPE_PKTDMA_V2) {
+	if (ud->match_data->version == K3_UDMA_V2) {
 		__be32 addr[2] = {0, 0};
 		struct of_phandle_args out_irq;
 		int ret;
@@ -203,7 +202,7 @@ EXPORT_SYMBOL(xudma_pktdma_tflow_get_irq);
 
 int xudma_pktdma_rflow_get_irq(struct udma_dev *ud, int udma_rflow_id)
 {
-	if (ud->match_data->type == DMA_TYPE_PKTDMA_V2) {
+	if (ud->match_data->version == K3_UDMA_V2) {
 		__be32 addr[2] = {0, 0};
 		struct of_phandle_args out_irq;
 		int ret;
