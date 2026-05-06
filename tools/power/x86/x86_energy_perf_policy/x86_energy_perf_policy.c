@@ -584,7 +584,7 @@ static int platform_profile_access(int mode)
 	return 1;
 }
 
-static int platform_profile_name_is(char *name)
+static int platform_profile_name_is(const char *name)
 {
 	char buf[64];
 
