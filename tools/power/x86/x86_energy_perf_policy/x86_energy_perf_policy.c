@@ -98,6 +98,7 @@ unsigned char update_platform_profile;
 int soc_slider_balance;
 int soc_slider_offset;
 char platform_profile[64];
+char msr_path[64];
 
 #define PATH_TO_CPU "/sys/devices/system/cpu/"
 #define SYSFS_PATH_MAX 255
@@ -799,21 +800,31 @@ void err_on_hypervisor(void)
 		err(-1, "not supported on this virtual machine");
 }
 
+/*
+ * The Linux MSR driver uses offsets into /dev/cpu/{cpu#}/msr
+ * Some Android versions uses an incompatible path: /dev/msr{cpu#}
+ * Probe and prefer the Linux path, use Android if Linux does not work.
+ */
+static void set_msr_path(int cpu)
+{
+	if (snprintf(msr_path, sizeof(msr_path), use_android_msr_path ? "/dev/msr%d" : "/dev/cpu/%d/msr", cpu) >= (int)sizeof(msr_path))
+		err(-1, "MSR path buffer overflow for cpu%d", cpu);
+}
+
 int get_msr(int cpu, int offset, unsigned long long *msr)
 {
 	int retval;
-	char pathname[32];
 	int fd;
 
-	sprintf(pathname, use_android_msr_path ? "/dev/msr%d" : "/dev/cpu/%d/msr", cpu);
-	fd = open(pathname, O_RDONLY);
+	set_msr_path(cpu);
+	fd = open(msr_path, O_RDONLY);
 	if (fd < 0)
-		err(-1, "%s open failed, try chown or chmod +r %s, or run as root", pathname, use_android_msr_path ? "/dev/msr*" : "/dev/cpu/*/msr");
+		err(-1, "%s open failed, try chown or chmod +r, or run as root", msr_path);
 
 	retval = pread(fd, msr, sizeof(*msr), offset);
 	if (retval != sizeof(*msr)) {
 		err_on_hypervisor();
-		err(-1, "%s offset 0x%llx read failed", pathname, (unsigned long long)offset);
+		err(-1, "%s offset 0x%llx read failed", msr_path, (unsigned long long)offset);
 	}
 
 	if (debug > 1)
@@ -825,14 +836,13 @@ int get_msr(int cpu, int offset, unsigned long long *msr)
 
 int put_msr(int cpu, int offset, unsigned long long new_msr)
 {
-	char pathname[32];
 	int retval;
 	int fd;
 
-	sprintf(pathname, use_android_msr_path ? "/dev/msr%d" : "/dev/cpu/%d/msr", cpu);
-	fd = open(pathname, O_RDWR);
+	set_msr_path(cpu);
+	fd = open(msr_path, O_RDWR);
 	if (fd < 0)
-		err(-1, "%s open failed, try chown or chmod +r %s, or run as root", pathname, use_android_msr_path ? "/dev/msr*" : "/dev/cpu/*/msr");
+		err(-1, "%s open failed, try chown or chmod +r, or run as root", msr_path);
 
 	retval = pwrite(fd, &new_msr, sizeof(new_msr), offset);
 	if (retval != sizeof(new_msr))
@@ -1604,22 +1614,20 @@ void set_base_cpu(void)
 static void probe_android_msr_path(void)
 {
 	struct stat sb;
-	char test_path[32];
 
-	sprintf(test_path, "/dev/msr%d", base_cpu);
-	if (stat(test_path, &sb) == 0)
+	set_msr_path(base_cpu);	/* called with use_android_path = 0, to probe Linux path */
+	if (stat(msr_path, &sb))
 		use_android_msr_path = 1;
 }
 
 void probe_dev_msr(void)
 {
 	struct stat sb;
-	char pathname[32];
 
 	probe_android_msr_path();
 
-	sprintf(pathname, use_android_msr_path ? "/dev/msr%d" : "/dev/cpu/%d/msr", base_cpu);
-	if (stat(pathname, &sb)) {
+	set_msr_path(base_cpu);
+	if (stat(msr_path, &sb)) {
 		if (system("/sbin/modprobe msr > /dev/null 2>&1")) {
 			if (use_android_msr_path)
 				err(-5, "no /dev/msr0, Try \"# modprobe msr\" ");
