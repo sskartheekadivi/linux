@@ -684,10 +684,7 @@ static int wave5_vpu_enc_encoder_cmd(struct file *file, void *fh, struct v4l2_en
 		m2m_ctx->last_src_buf = v4l2_m2m_last_src_buf(m2m_ctx);
 		m2m_ctx->is_draining = true;
 
-		if (v4l2_m2m_num_dst_bufs_ready(m2m_ctx) > 0) {
-			dev_dbg(inst->dev->dev, "Forcing job run for draining\n");
-			v4l2_m2m_try_schedule(m2m_ctx);
-		}
+		v4l2_m2m_try_schedule(m2m_ctx);
 		break;
 	case V4L2_ENC_CMD_START:
 		break;
@@ -1464,8 +1461,28 @@ static int wave5_vpu_enc_start_streaming(struct vb2_queue *q, unsigned int count
 		if (ret)
 			goto return_buffers;
 	}
-	if (inst->state == VPU_INST_STATE_OPEN && m2m_ctx->cap_q_ctx.q.streaming)
-		ret = wave5_vpu_enc_prepare_cap_seq(inst);
+	if (inst->state == VPU_INST_STATE_OPEN &&
+	    (m2m_ctx->cap_q_ctx.q.streaming || q->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE)) {
+		ret = initialize_sequence(inst);
+		if (ret) {
+			dev_warn(inst->dev->dev, "Sequence not found: %d\n", ret);
+			goto return_buffers;
+		}
+		ret = switch_state(inst, VPU_INST_STATE_INIT_SEQ);
+		if (ret)
+			goto return_buffers;
+		/*
+		 * The sequence must be analyzed first to calculate the proper
+		 * size of the auxiliary buffers.
+		 */
+		ret = prepare_fb(inst);
+		if (ret) {
+			dev_warn(inst->dev->dev, "Framebuffer preparation, fail: %d\n", ret);
+			goto return_buffers;
+		}
+
+		ret = switch_state(inst, VPU_INST_STATE_PIC_RUN);
+	}
 	if (ret)
 		goto return_buffers;
 
@@ -1679,8 +1696,10 @@ static int wave5_vpu_open_enc(struct file *filp)
 	inst->ops = &wave5_vpu_enc_inst_ops;
 
 	inst->codec_info = kzalloc(sizeof(*inst->codec_info), GFP_KERNEL);
-	if (!inst->codec_info)
+	if (!inst->codec_info) {
+		kfree(inst);
 		return -ENOMEM;
+	}
 
 	v4l2_fh_init(&inst->v4l2_fh, vdev);
 	filp->private_data = &inst->v4l2_fh;
