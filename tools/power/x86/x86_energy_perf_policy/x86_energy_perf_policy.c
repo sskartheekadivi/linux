@@ -34,6 +34,9 @@
 #define	OPTARG_BALANCE_PERFORMANCE	(INT_MAX - 4)
 #define	OPTARG_PERFORMANCE		(INT_MAX - 5)
 
+/* Maximum HWP activity window duration in microseconds */
+#define HWP_WINDOW_MAX_USEC 1270000000U
+
 struct msr_hwp_cap {
 	unsigned char highest;
 	unsigned char guaranteed;
@@ -273,8 +276,8 @@ int parse_cmdline_hwp_window(int i)
 	case OPTARG_PERFORMANCE:
 		return 0;
 	}
-	if (i < 0 || i > 1270000000) {
-		fprintf(stderr, "--hwp-window: 0 for auto; 1 - 1270000000 usec for window duration\n");
+	if (i < 0 || i > HWP_WINDOW_MAX_USEC) {
+		fprintf(stderr, "--hwp-window: 0 for auto; 1 - %u usec for window duration\n", HWP_WINDOW_MAX_USEC);
 		usage();
 	}
 	for (exponent = 0;; ++exponent) {
