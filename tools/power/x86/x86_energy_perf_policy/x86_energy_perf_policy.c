@@ -15,6 +15,7 @@
 #include <sys/types.h>
 #include <sched.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <sys/resource.h>
 #include <getopt.h>
 #include <err.h>
@@ -1611,30 +1612,41 @@ void set_base_cpu(void)
 		err(-ENODEV, "No valid cpus found");
 }
 
-static void probe_android_msr_path(void)
+/* return 0 if path exists */
+static int check_msr_path(void)
 {
 	struct stat sb;
 
-	set_msr_path(base_cpu);	/* called with use_android_path = 0, to probe Linux path */
-	if (stat(msr_path, &sb))
-		use_android_msr_path = 1;
+	return stat(msr_path, &sb);
 }
 
+/*
+ * Check Linux MSR path
+ * If it fails, try modprobe and check it again
+ * If still no joy, enable Android path and try again
+ */
 void probe_dev_msr(void)
 {
-	struct stat sb;
+	int retval;
 
-	probe_android_msr_path();
-
+	use_android_msr_path = 0;
 	set_msr_path(base_cpu);
-	if (stat(msr_path, &sb)) {
-		if (system("/sbin/modprobe msr > /dev/null 2>&1")) {
-			if (use_android_msr_path)
-				err(-5, "no /dev/msr0, Try \"# modprobe msr\" ");
-			else
-				err(-5, "no /dev/cpu/0/msr, Try \"# modprobe msr\" ");
-		}
-	}
+	if (check_msr_path() == 0)
+		return;
+
+	retval = system("/sbin/modprobe msr > /dev/null 2>&1");
+
+	if (check_msr_path() == 0)
+		return;
+
+	use_android_msr_path = 1;
+	set_msr_path(base_cpu);
+	if (check_msr_path() == 0)
+		return;
+
+	if (WIFEXITED(retval))
+		retval = WEXITSTATUS(retval);
+	err(-1, "\"msr\" driver support required, modprobe msr returned %d", retval);
 }
 
 static void get_cpuid_or_exit(unsigned int leaf, unsigned int *eax, unsigned int *ebx, unsigned int *ecx, unsigned int *edx)
