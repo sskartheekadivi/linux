@@ -219,10 +219,8 @@ static int tegra210_bpmp_init(struct tegra_bpmp *bpmp)
 
 	err = devm_request_irq(&pdev->dev, err, rx_irq,
 			       IRQF_NO_SUSPEND, dev_name(&pdev->dev), bpmp);
-	if (err < 0) {
-		dev_err(&pdev->dev, "failed to request IRQ: %d\n", err);
+	if (err < 0)
 		return err;
-	}
 
 	return tegra_bpmp_init_ping(bpmp);
 }
