@@ -266,7 +266,7 @@ struct udma_filter_param {
 struct udma_v2_filter_param {
 	u32 tr_trigger_type;
 	u32 trigger_param;
-	int remote_thread_id;
+	u32 channel_id;
 	u32 asel;
 };
 

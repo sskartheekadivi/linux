@@ -65,7 +65,12 @@ properties:
 
           Please refer to the device documentation for global interface indexes.
 
-      cell 3: Channel number for the peripheral
+      cell 3: Hardware channel ID for the peripheral
+        This is the mapped_channel_id assigned to the peripheral in the PSI-L
+        endpoint map. For XYMF peripherals (SPI, CRC32) each chip-select/FIFO
+        has a distinct channel ID; use the channel ID for the specific
+        direction and chip-select being requested. Use 0 for triggered
+        block-copy channels (cell 1 != 0).
 
         Please refer to the device documentation for the channel map.
 

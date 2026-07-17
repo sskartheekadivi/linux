@@ -119,6 +119,41 @@
 		regulator-always-on;
 		regulator-boot-on;
 	};
+
+	tlv320_mclk: clk-0 {
+		#clock-cells = <0>;
+		compatible = "fixed-clock";
+		clock-frequency = <12288000>;
+	};
+
+	codec_audio: sound {
+		compatible = "simple-audio-card";
+		simple-audio-card,name = "AM62L-SKEVM";
+		simple-audio-card,widgets =
+			"Headphone",	"Headphone Jack",
+			"Line",		"Line In",
+			"Microphone",	"Microphone Jack";
+		simple-audio-card,routing =
+			"Headphone Jack",	"HPLOUT",
+			"Headphone Jack",	"HPROUT",
+			"LINE1L",		"Line In",
+			"LINE1R",		"Line In",
+			"MIC3R",		"Microphone Jack",
+			"Microphone Jack",	"Mic Bias";
+		simple-audio-card,format = "dsp_b";
+		simple-audio-card,bitclock-master = <&sound_master>;
+		simple-audio-card,frame-master = <&sound_master>;
+		simple-audio-card,bitclock-inversion;
+
+		simple-audio-card,cpu {
+			sound-dai = <&mcasp0>;
+		};
+
+		sound_master: simple-audio-card,codec {
+			sound-dai = <&tlv320aic3106>;
+			clocks = <&tlv320_mclk>;
+		};
+	};
 };
 
 &gpio0 {
@@ -192,6 +227,19 @@
 		bootph-all;
 	};
 
+	tlv320aic3106: audio-codec@1b {
+		#sound-dai-cells = <0>;
+		compatible = "ti,tlv320aic3106";
+		reg = <0x1b>;
+		ai3x-micbias-vg = <1>;	/* 2.0V */
+
+		/* Regulators */
+		AVDD-supply = <&vcc_3v3_sys>;
+		IOVDD-supply = <&vcc_3v3_sys>;
+		DRVDD-supply = <&vcc_1v8>;
+		DVDD-supply = <&vcc_1v8>;
+	};
+
 };
 
 &i2c2 {
@@ -248,6 +296,34 @@
 		pinctrl-single,pins = <
 			AM62LX_IOPAD(0x01dc, PIN_INPUT_PULLUP, 0) /* (B8) I2C2_SCL */
 			AM62LX_IOPAD(0x01e0, PIN_INPUT_PULLUP, 0) /* (D8) I2C2_SDA */
+		>;
+	};
+
+	ospi0_pins_default: ospi0-default-pins {
+		bootph-all;
+		pinctrl-single,pins = <
+			AM62LX_IOPAD(0x003c, PIN_OUTPUT, 0) /* (D22) OSPI0_CLK */
+			AM62LX_IOPAD(0x0068, PIN_OUTPUT, 0) /* (C20) OSPI0_CSn0 */
+			AM62LX_IOPAD(0x0074, PIN_OUTPUT, 0) /* (C23) OSPI0_CSn3 */
+			AM62LX_IOPAD(0x0048, PIN_INPUT, 0) /* (C22) OSPI0_D0 */
+			AM62LX_IOPAD(0x004c, PIN_INPUT, 0) /* (D21) OSPI0_D1 */
+			AM62LX_IOPAD(0x0050, PIN_INPUT, 0) /* (E23) OSPI0_D2 */
+			AM62LX_IOPAD(0x0054, PIN_INPUT, 0) /* (D23) OSPI0_D3 */
+			AM62LX_IOPAD(0x0058, PIN_INPUT, 0) /* (F21) OSPI0_D4 */
+			AM62LX_IOPAD(0x005c, PIN_INPUT, 0) /* (F19) OSPI0_D5 */
+			AM62LX_IOPAD(0x0060, PIN_INPUT, 0) /* (G20) OSPI0_D6 */
+			AM62LX_IOPAD(0x0064, PIN_INPUT, 0) /* (F20) OSPI0_D7 */
+			AM62LX_IOPAD(0x0044, PIN_INPUT, 0) /* (E22) OSPI0_DQS */
+			AM62LX_IOPAD(0x0040, PIN_INPUT, 0) /* (E18) OSPI0_LBCLKO */
+		>;
+	};
+
+	main_mcasp0_pins_default: main-mcasp0-default-pins {
+		pinctrl-single,pins = <
+			AM62LX_IOPAD(0x0190, PIN_INPUT, 0) /* (A11) MCASP0_ACLKX */
+			AM62LX_IOPAD(0x0194, PIN_INPUT, 0) /* (B11) MCASP0_AFSX */
+			AM62LX_IOPAD(0x018c, PIN_INPUT, 0) /* (B9) MCASP0_AXR0 */
+			AM62LX_IOPAD(0x0188, PIN_INPUT, 0) /* (A9) MCASP0_AXR1 */
 		>;
 	};
 
@@ -486,6 +562,145 @@
 	dr_mode = "host";
 	pinctrl-names = "default";
 	pinctrl-0 = <&usb1_default_pins>;
+};
+
+&ospi0 {
+	bootph-all;
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&ospi0_pins_default>;
+
+	ospi0_nor: flash@0 {
+		bootph-all;
+		compatible = "jedec,spi-nor";
+		reg = <0x0>;
+		spi-tx-bus-width = <8>;
+		spi-rx-bus-width = <8>;
+		spi-max-frequency = <166000000>;
+		cdns,tshsl-ns = <60>;
+		cdns,tsd2d-ns = <60>;
+		cdns,tchsh-ns = <60>;
+		cdns,tslch-ns = <60>;
+		cdns,read-delay = <4>;
+
+		partitions {
+			bootph-all;
+			compatible = "fixed-partitions";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			partition@0 {
+				label = "ospi.tiboot3";
+				reg = <0x0 0x80000>;
+			};
+
+			partition@80000 {
+				label = "ospi.tispl";
+				reg = <0x80000 0x200000>;
+			};
+
+			partition@280000 {
+				label = "ospi.u-boot";
+				reg = <0x280000 0x400000>;
+			};
+
+			partition@680000 {
+				label = "ospi.env";
+				reg = <0x680000 0x40000>;
+			};
+
+			partition@6c0000 {
+				label = "ospi.env.backup";
+				reg = <0x6c0000 0x40000>;
+			};
+
+			partition@800000 {
+				label = "ospi.rootfs";
+				reg = <0x800000 0x37c0000>;
+			};
+
+			partition@3fc0000 {
+				bootph-all;
+				label = "ospi.phypattern";
+				reg = <0x3fc0000 0x40000>;
+			};
+		};
+	};
+
+	ospi0_nand: flash@3 {
+		bootph-all;
+		compatible = "spi-nand";
+		reg = <0x3>;
+		spi-tx-bus-width = <4>;
+		spi-rx-bus-width = <4>;
+		spi-max-frequency = <166000000>;
+		cdns,tshsl-ns = <60>;
+		cdns,tsd2d-ns = <60>;
+		cdns,tchsh-ns = <60>;
+		cdns,tslch-ns = <60>;
+		cdns,read-delay = <2>;
+
+		partitions {
+			bootph-all;
+			compatible = "fixed-partitions";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			partition@0 {
+				label = "qspi.tiboot3";
+				reg = <0x0 0x80000>;
+			};
+
+			partition@80000 {
+				label = "qspi.tispl";
+				reg = <0x80000 0x200000>;
+			};
+
+			partition@280000 {
+				label = "qspi.u-boot";
+				reg = <0x280000 0x400000>;
+			};
+
+			partition@680000 {
+				label = "qspi.env";
+				reg = <0x680000 0x40000>;
+			};
+
+			partition@6c0000 {
+				label = "qspi.env.backup";
+				reg = <0x6c0000 0x40000>;
+			};
+
+			partition@2000000 {
+				label = "qspi.rootfs";
+				reg = <0x2000000 0x5fe0000>;
+			};
+
+			partition@7fe0000 {
+				bootph-all;
+				label = "qspi.phypattern";
+				reg = <0x7fe0000 0x20000>;
+			};
+		};
+	};
+};
+
+&mcasp0 {
+	status = "okay";
+	#sound-dai-cells = <0>;
+
+	pinctrl-names = "default";
+	pinctrl-0 = <&main_mcasp0_pins_default>;
+
+	op-mode = <0>;		/* MCASP_IIS_MODE */
+	tdm-slots = <2>;
+
+	serial-dir = <	/* 0: INACTIVE, 1: TX, 2: RX */
+	       1 2 0 0
+	       0 0 0 0
+	       0 0 0 0
+	       0 0 0 0
+	>;
 };
 
 &wkup_uart0 {

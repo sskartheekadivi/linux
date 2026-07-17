@@ -841,7 +841,10 @@ static int pktdma_v2_alloc_chan_resources(struct dma_chan *chan)
 
 	uc->psil_paired = true;
 
-	snprintf(irq_name, sizeof(irq_name), "chan%u", irq_ring_idx);
+	if (uc->config.dir == DMA_MEM_TO_DEV)
+		snprintf(irq_name, sizeof(irq_name), "tflow%u", irq_ring_idx);
+	else
+		snprintf(irq_name, sizeof(irq_name), "rflow%u", irq_ring_idx);
 	uc->irq_num_ring = platform_get_irq_byname(pdev, irq_name);
 	if (uc->irq_num_ring < 0)
 		return uc->irq_num_ring;
@@ -990,6 +993,8 @@ static bool udma_v2_dma_filter_fn(struct dma_chan *chan, void *param)
 	struct udma_chan_config *ucc;
 	struct udma_chan *uc;
 	struct udma_dev *ud;
+	u32 thread_id;
+	bool dev_to_mem;
 
 	if (chan->device->dev->driver != &bcdma_v2_driver.driver &&
 	    chan->device->dev->driver != &pktdma_v2_driver.driver)
@@ -1006,29 +1011,26 @@ static bool udma_v2_dma_filter_fn(struct dma_chan *chan, void *param)
 		return false;
 	}
 
-	ucc->remote_thread_id = filter_param->remote_thread_id;
 	ucc->asel = filter_param->asel;
 	ucc->tr_trigger_type = filter_param->tr_trigger_type;
 
 	if (ucc->tr_trigger_type) {
 		ucc->dir = DMA_MEM_TO_MEM;
 		goto triggered_bchan;
-	} else if (ucc->remote_thread_id & K3_PSIL_DST_THREAD_ID_OFFSET) {
-		ucc->dir = DMA_MEM_TO_DEV;
-	} else {
-		ucc->dir = DMA_DEV_TO_MEM;
 	}
 
-	ep_config = psil_get_ep_config(ucc->remote_thread_id);
+	ep_config = psil_get_ep_config_by_id(filter_param->channel_id,
+					      (ud->match_data->type == DMA_TYPE_PKTDMA),
+					      &thread_id, &dev_to_mem);
 	if (IS_ERR(ep_config)) {
-		dev_err(ud->dev, "No configuration for psi-l thread 0x%04x\n",
-			ucc->remote_thread_id);
-		ucc->dir = DMA_MEM_TO_MEM;
-		ucc->remote_thread_id = -1;
+		dev_err(ud->dev, "No config for channel %u\n",
+			filter_param->channel_id);
 		ucc->atype = 0;
 		ucc->asel = 0;
 		return false;
 	}
+	ucc->remote_thread_id = thread_id;
+	ucc->dir = dev_to_mem ? DMA_DEV_TO_MEM : DMA_MEM_TO_DEV;
 
 	ucc->pkt_mode = ep_config->pkt_mode;
 	ucc->channel_tpl = ep_config->channel_tpl;
@@ -1094,13 +1096,13 @@ static struct dma_chan *udma_v2_of_xlate(struct of_phandle_args *dma_spec,
 
 		filter_param.tr_trigger_type = dma_spec->args[0];
 		filter_param.trigger_param = dma_spec->args[1];
-		filter_param.remote_thread_id = dma_spec->args[2];
+		filter_param.channel_id = dma_spec->args[2];
 		filter_param.asel = dma_spec->args[3];
 	} else {
 		if (dma_spec->args_count != 1 && dma_spec->args_count != 2)
 			return NULL;
 
-		filter_param.remote_thread_id = dma_spec->args[0];
+		filter_param.channel_id = dma_spec->args[0];
 		filter_param.tr_trigger_type = 0;
 		if (dma_spec->args_count == 2)
 			filter_param.asel = dma_spec->args[1];

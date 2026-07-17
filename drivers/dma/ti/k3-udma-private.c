@@ -187,7 +187,7 @@ int xudma_pktdma_tflow_get_irq(struct udma_dev *ud, int udma_tflow_id)
 	struct platform_device *pdev = to_platform_device(ud->dev);
 	char irq_name[10];
 
-	snprintf(irq_name, sizeof(irq_name), "chan%u", udma_tflow_id);
+	snprintf(irq_name, sizeof(irq_name), "tflow%u", udma_tflow_id);
 	return platform_get_irq_byname(pdev, irq_name);
 }
 EXPORT_SYMBOL(xudma_pktdma_tflow_get_irq);
@@ -202,7 +202,7 @@ int xudma_pktdma_rflow_get_irq(struct udma_dev *ud, int udma_rflow_id)
 	struct platform_device *pdev = to_platform_device(ud->dev);
 	char irq_name[10];
 
-	snprintf(irq_name, sizeof(irq_name), "chan%u", udma_rflow_id);
+	snprintf(irq_name, sizeof(irq_name), "rflow%u", udma_rflow_id);
 	return platform_get_irq_byname(pdev, irq_name);
 }
 EXPORT_SYMBOL(xudma_pktdma_rflow_get_irq);
