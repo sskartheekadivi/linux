@@ -900,7 +900,7 @@ static unsigned int read_sysfs(const char *path, char *buf, size_t buflen)
 	return (unsigned int)numread;
 }
 
-static unsigned int write_sysfs(const char *path, char *buf, size_t buflen)
+static ssize_t write_sysfs(const char *path, char *buf, size_t buflen)
 {
 	ssize_t numwritten;
 	int fd;
@@ -919,7 +919,7 @@ static unsigned int write_sysfs(const char *path, char *buf, size_t buflen)
 
 	close(fd);
 
-	return (unsigned int)numwritten;
+	return numwritten;
 }
 
 static int sysfs_read_string(const char *path, char *buf, size_t buflen)
@@ -944,7 +944,7 @@ static int sysfs_write_string(const char *path, const char *buf)
 	len = snprintf(tmp, sizeof(tmp), "%s\n", buf);
 	if (len < 0 || len >= (int)sizeof(tmp))
 		return -1;
-	return write_sysfs(path, tmp, (size_t)len + 1) ? 0 : -1;
+	return write_sysfs(path, tmp, (size_t)len + 1) > 0 ? 0 : -1;
 }
 
 void print_hwp_cap(int cpu, struct msr_hwp_cap *cap, char *str)
@@ -1050,7 +1050,7 @@ static int set_epb_sysfs(int cpu, int val)
 	char path[SYSFS_PATH_MAX];
 	char linebuf[3];
 	char *endp;
-	int ret;
+	ssize_t ret;
 
 	if (!has_epb)
 		return -1;
