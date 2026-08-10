@@ -7,6 +7,74 @@
  */
 
 &cbass_main {
+	cpsw3g: ethernet@8000000 {
+		compatible = "ti,am642-cpsw-nuss";
+		#address-cells = <2>;
+		#size-cells = <2>;
+		reg = <0x00 0x08000000 0x00 0x200000>;
+		reg-names = "cpsw_nuss";
+		ranges = <0x00 0x00 0x00 0x08000000 0x00 0x200000>;
+		clocks = <&scmi_clk 9>;
+		clock-names = "fck";
+		power-domains = <&scmi_pds 3>;
+		dmas = <&main_pktdma 64 15>,
+			   <&main_pktdma 66 15>,
+			   <&main_pktdma 68 15>,
+			   <&main_pktdma 70 15>,
+			   <&main_pktdma 72 15>,
+			   <&main_pktdma 74 15>,
+			   <&main_pktdma 76 15>,
+			   <&main_pktdma 78 15>,
+			   <&main_pktdma 96 15>;
+		dma-names = "tx0", "tx1", "tx2", "tx3", "tx4", "tx5", "tx6",
+					"tx7", "rx";
+		status = "disabled";
+
+		ethernet-ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			cpsw_port1: port@1 {
+				reg = <1>;
+				ti,mac-only;
+				label = "port1";
+				phys = <&phy_gmii_sel 1>;
+				ti,syscon-efuse = <&cpsw_mac_syscon 0x0>;
+				mac-address = [00 00 00 00 00 00];
+			};
+
+			cpsw_port2: port@2 {
+				reg = <2>;
+				ti,mac-only;
+				label = "port2";
+				phys = <&phy_gmii_sel 2>;
+				mac-address = [00 00 00 00 00 00];
+			};
+		};
+
+		cpsw3g_mdio: mdio@f00 {
+			compatible = "ti,cpsw-mdio","ti,davinci_mdio";
+			reg = <0x00 0xf00 0x00 0x100>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			clocks = <&scmi_clk 9>;
+			clock-names = "fck";
+			bus_freq = <1000000>;
+			status = "disabled";
+		};
+
+		cpts@3d000 {
+			compatible = "ti,j721e-cpts";
+			reg = <0x00 0x3d000 0x00 0x400>;
+			clocks = <&scmi_clk 10>;
+			clock-names = "cpts";
+			interrupts-extended = <&gic500 GIC_SPI 234 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-names = "cpts";
+			ti,cpts-ext-ts-inputs = <4>;
+			ti,cpts-periodic-outputs = <2>;
+		};
+	};
+
 	gic500: interrupt-controller@1800000 {
 		compatible = "arm,gic-v3";
 		reg = <0x00 0x01800000 0x00 0x10000>,	/* GICD */
@@ -78,6 +146,229 @@
 		clock-names = "gpio";
 		ti,ngpio = <79>;
 		ti,davinci-gpio-unbanked = <0>;
+	};
+
+	main_conf: bus@9000000 {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges = <0x0 0x00 0x09000000 0x400000>;
+
+		phy_gmii_sel: phy@1be000 {
+			compatible = "ti,am654-phy-gmii-sel";
+			reg = <0x1be000 0x8>;
+			#phy-cells = <1>;
+		};
+	};
+
+	main_bcdma: dma-controller@485c4000 {
+		compatible = "ti,am62l-dmss-bcdma";
+		reg = <0x00 0x485c4000 0x00 0x4000>,
+			<0x00 0x48880000 0x00 0x10000>,
+			<0x00 0x48800000 0x00 0x80000>,
+			<0x00 0x47000000 0x00 0x200000>;
+		reg-names = "gcfg", "bchanrt", "chanrt", "ringrt";
+		#dma-cells = <4>;
+		interrupts = <GIC_SPI 352 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 353 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 356 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 357 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 360 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 361 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 364 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 365 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 368 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 369 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 372 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 373 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 376 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 377 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 320 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 321 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 320 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 321 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 320 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 321 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 320 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 321 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 324 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 325 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 324 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 325 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 324 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 325 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 324 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 325 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 328 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 329 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 328 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 329 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 328 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 329 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 328 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 329 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 332 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 333 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 332 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 333 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 332 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 333 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 332 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 333 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 384 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 385 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 386 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 387 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 388 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 389 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 52 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 49 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 50 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 482 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 482 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 548 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 548 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 516 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 517 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 518 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 519 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 520 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 521 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 522 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 523 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 524 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 525 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 526 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 527 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 528 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 529 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 530 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 531 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-names = "chan0", "chan1", "chan2", "chan3", "chan4",
+				  "chan5", "chan6", "chan7", "chan8", "chan9",
+				  "chan10", "chan11", "chan12", "chan13",
+				  "chan16", "chan17", "chan18", "chan19",
+				  "chan20", "chan21", "chan22", "chan23",
+				  "chan24", "chan25", "chan26", "chan27",
+				  "chan28", "chan29", "chan30", "chan31",
+				  "chan32", "chan33", "chan34", "chan35",
+				  "chan36", "chan37", "chan38", "chan39",
+				  "chan40", "chan41", "chan42", "chan43",
+				  "chan44", "chan45", "chan46", "chan47",
+				  "chan48", "chan49", "chan50", "chan51",
+				  "chan52", "chan53", "chan64", "chan65",
+				  "chan66", "chan80", "chan81", "chan67",
+				  "chan68", "chan128", "chan129", "chan130",
+				  "chan131", "chan132", "chan133", "chan134",
+				  "chan135", "chan136", "chan137", "chan138",
+				  "chan139", "chan140", "chan141", "chan142",
+				  "chan143";
+	};
+
+	main_pktdma: dma-controller@485c0000 {
+		compatible = "ti,am62l-dmss-pktdma";
+		reg = <0x00 0x485c0000 0x00 0x4000>,
+			<0x00 0x48900000 0x00 0x80000>,
+			<0x00 0x47200000 0x00 0x100000>;
+		reg-names = "gcfg", "chanrt", "ringrt";
+		#dma-cells = <2>;
+		interrupts = <GIC_SPI 354 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 355 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 358 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 359 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 362 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 363 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 366 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 367 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 370 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 371 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 374 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 375 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 378 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 379 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 322 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 323 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 322 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 323 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 322 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 323 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 322 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 323 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 326 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 327 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 326 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 327 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 326 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 327 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 326 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 327 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 330 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 331 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 330 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 331 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 330 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 331 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 330 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 331 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 334 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 335 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 334 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 335 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 334 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 335 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 334 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 335 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 500 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 501 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 502 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 503 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 504 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 505 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 506 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 507 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 508 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 509 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 510 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 511 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 512 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 513 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 514 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 515 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 484 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 485 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 486 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 487 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 488 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 489 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 490 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 491 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 492 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 493 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 494 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 495 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 496 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 497 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 498 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 499 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-names = "rx-0", "tx-1", "rx-2", "tx-3", "rx-4",
+				  "tx-5", "rx-6", "tx-7", "rx-8", "tx-9",
+				  "rx-10", "tx-11", "rx-12", "tx-13",
+				  "rx-16", "tx-17", "rx-18", "tx-19",
+				  "rx-20", "tx-21", "rx-22", "tx-23",
+				  "rx-24", "tx-25", "rx-26", "tx-27",
+				  "rx-28", "tx-29", "rx-30", "tx-31",
+				  "rx-32", "tx-33", "rx-34", "tx-35",
+				  "rx-36", "tx-37", "rx-38", "tx-39",
+				  "rx-40", "tx-41", "rx-42", "tx-43",
+				  "rx-44", "tx-45", "rx-46", "tx-47",
+				  "tx-64", "tx-65", "tx-66", "tx-67",
+				  "tx-68", "tx-69", "tx-70", "tx-71",
+				  "tx-72", "tx-73", "tx-74", "tx-75",
+				  "tx-76", "tx-77", "tx-78", "tx-79",
+				  "rx-96", "rx-97", "rx-98", "rx-99",
+				  "rx-100", "rx-101", "rx-102", "rx-103",
+				  "rx-104", "rx-105", "rx-106", "rx-107",
+				  "rx-108", "rx-109", "rx-110", "rx-111";
 	};
 
 	timer0: timer@2400000 {
@@ -411,6 +702,8 @@
 		#size-cells = <0>;
 		power-domains = <&scmi_pds 72>;
 		clocks = <&scmi_clk 299>;
+		dmas = <&main_bcdma 0 0 16 0>, <&main_bcdma 0 0 17 0>;
+		dma-names = "rx", "tx";
 		status = "disabled";
 	};
 
@@ -422,6 +715,9 @@
 		#size-cells = <0>;
 		power-domains = <&scmi_pds 73>;
 		clocks = <&scmi_clk 302>;
+		dmas = <&main_bcdma 0 0 24 0>, <&main_bcdma 0 0 25 0>,
+		       <&main_bcdma 0 0 26 0>, <&main_bcdma 0 0 27 0>;
+		dma-names = "rx0", "tx0", "rx1", "tx1";
 		status = "disabled";
 	};
 
@@ -433,6 +729,8 @@
 		#size-cells = <0>;
 		power-domains = <&scmi_pds 74>;
 		clocks = <&scmi_clk 305>;
+		dmas = <&main_bcdma 0 0 32 0>, <&main_bcdma 0 0 33 0>;
+		dma-names = "rx", "tx";
 		status = "disabled";
 	};
 
@@ -444,6 +742,8 @@
 		#size-cells = <0>;
 		power-domains = <&scmi_pds 75>;
 		clocks = <&scmi_clk 308>;
+		dmas = <&main_bcdma 0 0 40 0>, <&main_bcdma 0 0 41 0>;
+		dma-names = "rx", "tx";
 		status = "disabled";
 	};
 
@@ -544,6 +844,26 @@
 		status = "disabled";
 	};
 
+	tscadc0: tscadc@28001000 {
+		compatible = "ti,am654-tscadc", "ti,am3359-tscadc";
+		reg = <0x00 0x28001000 0x00 0x1000>;
+		interrupts = <GIC_SPI 253 IRQ_TYPE_LEVEL_HIGH>;
+		power-domains = <&scmi_pds 0>;
+		clocks = <&scmi_clk 4>;
+		assigned-clocks = <&scmi_clk 4>;
+		assigned-clock-parents = <&scmi_clk 2>;
+		assigned-clock-rates = <60000000>;
+		clock-names = "fck";
+		dmas = <&main_bcdma 0 0 80 0>, <&main_bcdma 0 0 81 0>;
+		dma-names = "fifo0", "fifo1";
+		status = "disabled";
+
+		adc {
+			#io-channel-cells = <1>;
+			compatible = "ti,am654-adc", "ti,am3359-adc";
+		};
+	};
+
 	gpmc0: memory-controller@3b000000 {
 		compatible = "ti,am64-gpmc";
 		power-domains = <&scmi_pds 37>;
@@ -583,5 +903,92 @@
 			reg = <0x00 0x100>;
 			bootph-all;
 		};
+	};
+
+	fss: bus@fc00000 {
+		compatible = "simple-bus";
+		reg = <0x00 0x0fc00000 0x00 0x70000>;
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		ospi0: spi@fc40000 {
+			compatible = "ti,am654-ospi", "cdns,qspi-nor";
+			reg = <0x00 0x0fc40000 0x00 0x100>,
+			      <0x05 0x00000000 0x01 0x00000000>;
+			interrupts = <GIC_SPI 240 IRQ_TYPE_LEVEL_HIGH>;
+			cdns,fifo-depth = <256>;
+			cdns,fifo-width = <4>;
+			cdns,trigger-address = <0x0>;
+			cdns,phase-detect-selector = <2>;
+			clocks = <&scmi_clk 136>;
+			assigned-clocks = <&scmi_clk 136>;
+			assigned-clock-rates = <166666666>;
+			power-domains = <&scmi_pds 32>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "disabled";
+		};
+	};
+
+	crypto: crypto@40800000 {
+		compatible = "ti,am62l-dthev2";
+		reg = <0x00 0x40800000 0x00 0x14000>;
+		dmas = <&main_bcdma 0 0 65 0>,
+		       <&main_bcdma 0 0 66 0>,
+		       <&main_bcdma 0 0 64 0>;
+		dma-names = "rx", "tx1", "tx2";
+	};
+
+	mcasp0: audio-controller@2b00000 {
+		compatible = "ti,am33xx-mcasp-audio";
+		reg = <0x00 0x02b00000 0x00 0x2000>,
+		      <0x00 0x02b08000 0x00 0x400>;
+		reg-names = "mpu", "dat";
+		interrupts = <GIC_SPI 246 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 245 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-names = "tx", "rx";
+		clocks = <&scmi_clk 194>;
+		clock-names = "fck";
+		assigned-clocks = <&scmi_clk 194>;
+		assigned-clock-parents = <&scmi_clk 193>;
+		dmas = <&main_bcdma 0 0 49 0>, <&main_bcdma 0 0 48 0>;
+		dma-names = "tx", "rx";
+		power-domains = <&scmi_pds 50>;
+		status = "okay";
+	};
+
+	mcasp1: audio-controller@2b10000 {
+		compatible = "ti,am33xx-mcasp-audio";
+		reg = <0x00 0x02b10000 0x00 0x2000>,
+		      <0x00 0x02b18000 0x00 0x400>;
+		reg-names = "mpu", "dat";
+		interrupts = <GIC_SPI 248 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 247 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-names = "tx", "rx";
+		clocks = <&scmi_clk 216>;
+		clock-names = "fck";
+		assigned-clocks = <&scmi_clk 216>;
+		dmas = <&main_bcdma 0 0 51 0>, <&main_bcdma 0 0 50 0>;
+		dma-names = "tx", "rx";
+		power-domains = <&scmi_pds 51>;
+		status = "disabled";
+	};
+
+	mcasp2: audio-controller@2b20000 {
+		compatible = "ti,am33xx-mcasp-audio";
+		reg = <0x00 0x02b20000 0x00 0x2000>,
+		      <0x00 0x02b28000 0x00 0x400>;
+		reg-names = "mpu", "dat";
+		interrupts = <GIC_SPI 250 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 249 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-names = "tx", "rx";
+		clocks = <&scmi_clk 230>;
+		clock-names = "fck";
+		assigned-clocks = <&scmi_clk 230>;
+		dmas = <&main_bcdma 0 0 53 0>, <&main_bcdma 0 0 52 0>;
+		dma-names = "tx", "rx";
+		power-domains = <&scmi_pds 52>;
+		status = "disabled";
 	};
 };
