@@ -245,7 +245,6 @@ enum bup_vch_sel {
 #define AB8505_RTC_PCUT_CTL_STATUS_REG	0x12
 #define AB8505_RTC_PCUT_TIME_REG	0x13
 #define AB8505_RTC_PCUT_MAX_TIME_REG	0x14
-#define AB8505_RTC_PCUT_FLAG_TIME_REG	0x15
 #define AB8505_RTC_PCUT_RESTART_REG	0x16
 #define AB8505_RTC_PCUT_DEBOUNCE_REG	0x17
 
@@ -286,7 +285,6 @@ struct ab8500_fg;
  *				battery full while in maintenance, in per cent
  * @pcut_enable:			Enable power cut feature in ab8505
  * @pcut_max_time:		Max time threshold
- * @pcut_flag_time:		Flagtime threshold
  * @pcut_max_restart:		Max number of restarts
  * @pcut_debounce_time:		Sets battery debounce time
  */
@@ -307,7 +305,6 @@ struct ab8500_fg_parameters {
 	int maint_thres;
 	bool pcut_enable;
 	u8 pcut_max_time;
-	u8 pcut_flag_time;
 	u8 pcut_max_restart;
 	u8 pcut_debounce_time;
 };

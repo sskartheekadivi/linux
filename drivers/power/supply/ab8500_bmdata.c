@@ -98,7 +98,6 @@ static const struct ab8500_fg_parameters fg = {
 	.user_cap_limit = 15,
 	.pcut_enable = 1,
 	.pcut_max_time = 127,
-	.pcut_flag_time = 112,
 	.pcut_max_restart = 15,
 	.pcut_debounce_time = 2,
 };

@@ -2356,14 +2356,6 @@ static int ab8500_fg_init_hw_registers(struct ab8500_fg *di)
 		}
 
 		ret = abx500_set_register_interruptible(di->dev, AB8500_RTC,
-			AB8505_RTC_PCUT_FLAG_TIME_REG, di->bm->fg_params->pcut_flag_time);
-
-		if (ret) {
-			dev_err(di->dev, "%s write failed AB8505_RTC_PCUT_FLAG_TIME_REG\n", __func__);
-			goto out;
-		}
-
-		ret = abx500_set_register_interruptible(di->dev, AB8500_RTC,
 			AB8505_RTC_PCUT_RESTART_REG, di->bm->fg_params->pcut_max_restart);
 
 		if (ret) {
@@ -2569,56 +2561,6 @@ static int ab8500_fg_sysfs_init(struct ab8500_fg *di)
 	return ret;
 }
 
-static ssize_t ab8505_powercut_flagtime_read(struct device *dev,
-			     struct device_attribute *attr,
-			     char *buf)
-{
-	int ret;
-	u8 reg_value;
-	struct power_supply *psy = dev_to_psy(dev);
-	struct ab8500_fg *di = power_supply_get_drvdata(psy);
-
-	ret = abx500_get_register_interruptible(di->dev, AB8500_RTC,
-		AB8505_RTC_PCUT_FLAG_TIME_REG, &reg_value);
-
-	if (ret < 0) {
-		dev_err(dev, "Failed to read AB8505_RTC_PCUT_FLAG_TIME_REG\n");
-		goto fail;
-	}
-
-	return sysfs_emit(buf, "%d\n", (reg_value & 0x7F));
-
-fail:
-	return ret;
-}
-
-static ssize_t ab8505_powercut_flagtime_write(struct device *dev,
-				  struct device_attribute *attr,
-				  const char *buf, size_t count)
-{
-	int ret;
-	int reg_value;
-	struct power_supply *psy = dev_to_psy(dev);
-	struct ab8500_fg *di = power_supply_get_drvdata(psy);
-
-	if (kstrtoint(buf, 10, &reg_value))
-		goto fail;
-
-	if (reg_value > 0x7F) {
-		dev_err(dev, "Incorrect parameter, echo 0 (1.98s) - 127 (15.625ms) for flagtime\n");
-		goto fail;
-	}
-
-	ret = abx500_set_register_interruptible(di->dev, AB8500_RTC,
-		AB8505_RTC_PCUT_FLAG_TIME_REG, (u8)reg_value);
-
-	if (ret < 0)
-		dev_err(dev, "Failed to set AB8505_RTC_PCUT_FLAG_TIME_REG\n");
-
-fail:
-	return count;
-}
-
 static ssize_t ab8505_powercut_maxtime_read(struct device *dev,
 			     struct device_attribute *attr,
 			     char *buf)
@@ -2815,30 +2757,6 @@ fail:
 	return count;
 }
 
-static ssize_t ab8505_powercut_flag_read(struct device *dev,
-					 struct device_attribute *attr,
-					 char *buf)
-{
-
-	int ret;
-	u8 reg_value;
-	struct power_supply *psy = dev_to_psy(dev);
-	struct ab8500_fg *di = power_supply_get_drvdata(psy);
-
-	ret = abx500_get_register_interruptible(di->dev, AB8500_RTC,
-						AB8505_RTC_PCUT_CTL_STATUS_REG,  &reg_value);
-
-	if (ret < 0) {
-		dev_err(dev, "Failed to read AB8505_RTC_PCUT_CTL_STATUS_REG\n");
-		goto fail;
-	}
-
-	return sysfs_emit(buf, "%d\n", ((reg_value & 0x10) >> 4));
-
-fail:
-	return ret;
-}
-
 static ssize_t ab8505_powercut_debounce_read(struct device *dev,
 					     struct device_attribute *attr,
 					     char *buf)
@@ -2913,8 +2831,6 @@ fail:
 }
 
 static struct device_attribute ab8505_fg_sysfs_psy_attrs[] = {
-	__ATTR(powercut_flagtime, (S_IRUGO | S_IWUSR | S_IWGRP),
-		ab8505_powercut_flagtime_read, ab8505_powercut_flagtime_write),
 	__ATTR(powercut_maxtime, (S_IRUGO | S_IWUSR | S_IWGRP),
 		ab8505_powercut_maxtime_read, ab8505_powercut_maxtime_write),
 	__ATTR(powercut_restart_max, (S_IRUGO | S_IWUSR | S_IWGRP),
@@ -2924,7 +2840,6 @@ static struct device_attribute ab8505_fg_sysfs_psy_attrs[] = {
 		ab8505_powercut_restart_counter_read, NULL),
 	__ATTR(powercut_enable, (S_IRUGO | S_IWUSR | S_IWGRP),
 		ab8505_powercut_read, ab8505_powercut_write),
-	__ATTR(powercut_flag, S_IRUGO, ab8505_powercut_flag_read, NULL),
 	__ATTR(powercut_debounce_time, (S_IRUGO | S_IWUSR | S_IWGRP),
 		ab8505_powercut_debounce_read, ab8505_powercut_debounce_write),
 	__ATTR(powercut_enable_status, S_IRUGO,
