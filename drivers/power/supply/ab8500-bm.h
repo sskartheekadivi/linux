@@ -151,8 +151,7 @@
 #define CH_OP_CUR_LVL_0P9		0x08
 #define CH_OP_CUR_LVL_1P4		0x0D
 #define CH_OP_CUR_LVL_1P5		0x0E
-#define CH_OP_CUR_LVL_1P6		0x0F
-#define CH_OP_CUR_LVL_2P		0x3F
+#define CH_OP_CUR_LVL_1P5_MAX		0x0F
 
 /* BTEMP High thermal limits */
 #define BTEMP_HIGH_TH_57_0		0x00
@@ -233,7 +232,7 @@ enum bup_vch_sel {
 /* BatCtrl Current Source Constants */
 #define BAT_CTRL_7U_ENA			0x01
 #define BAT_CTRL_20U_ENA		0x02
-#define BAT_CTRL_18U_ENA		0x01
+#define BAT_CTRL_8U_ENA			0x01
 #define BAT_CTRL_16U_ENA		0x02
 #define BAT_CTRL_CMP_ENA		0x04
 #define FORCE_BAT_CTRL_CMP_HIGH		0x08

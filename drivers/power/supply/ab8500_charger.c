@@ -66,7 +66,7 @@
 #define LED_INDICATOR_PWM_ENA		0x01
 #define LED_INDICATOR_PWM_DIS		0x00
 #define LED_IND_CUR_5MA			0x04
-#define LED_INDICATOR_PWM_DUTY_252_256	0xBF
+#define LED_INDICATOR_PWM_DUTY_252_256	0xFB
 
 /* HW failure constants */
 #define MAIN_CH_TH_PROT			0x02
@@ -3063,7 +3063,7 @@ static int ab8500_charger_init_hw_registers(struct ab8500_charger *di)
 
 		ret = abx500_set_register_interruptible(di->dev,
 			AB8500_CHARGER, AB8500_CH_OPT_CRNTLVL_MAX_REG,
-			CH_OP_CUR_LVL_1P6);
+			CH_OP_CUR_LVL_1P5_MAX);
 		if (ret) {
 			dev_err(di->dev,
 				"failed to set CH_OPT_CRNTLVL_MAX_REG\n");
