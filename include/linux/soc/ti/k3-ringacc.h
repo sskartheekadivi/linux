@@ -159,6 +159,23 @@ u32 k3_ringacc_get_ring_id(struct k3_ring *ring);
 int k3_ringacc_get_ring_irq_num(struct k3_ring *ring);
 
 /**
+ * k3_ringacc_ring_get_irq_status - Get the irq status for the ring
+ * @ring: pointer on ring
+ *
+ * Returns the interrupt status
+ */
+u32 k3_ringacc_ring_get_irq_status(struct k3_ring *ring);
+
+/**
+ * k3_ringacc_ring_clear_irq - Clear the given interrupts
+ * @ring: pointer on ring
+ * @status: mask of interrupt status bits to clear
+ *
+ * Clears only the interrupt status bits set in @status on the ring
+ */
+void k3_ringacc_ring_clear_irq(struct k3_ring *ring, u32 status);
+
+/**
  * k3_ringacc_ring_cfg - ring configure
  * @ring: pointer on ring
  * @cfg: Ring configuration parameters (see &struct k3_ring_cfg)
@@ -262,6 +279,7 @@ struct k3_ringacc_init_data {
 	const struct ti_sci_handle *tisci;
 	u32 tisci_dev_id;
 	u32 num_rings;
+	void __iomem *base_rt;
 };
 
 struct k3_ringacc *k3_ringacc_dmarings_init(struct platform_device *pdev,
