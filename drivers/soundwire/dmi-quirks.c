@@ -130,6 +130,15 @@ static const struct adr_remap microsoft_sp11_intel[] = {
 	{}
 };
 
+static const struct adr_remap ghost_rt711[] = {
+	/* rt711 on link0 */
+	{
+		0x000030025d071101ull,
+		0x0000000000000000ull
+	},
+	{}
+};
+
 static const struct dmi_system_id adr_remap_quirk_table[] = {
 	/* TGL devices */
 	{
@@ -276,6 +285,13 @@ static const struct dmi_system_id adr_remap_quirk_table[] = {
 					"Surface_Pro_11th_Edition_With_Intel_For_Business_2103")
 		},
 		.driver_data = (void *)microsoft_sp11_intel,
+	},
+	{
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
+			DMI_MATCH(DMI_PRODUCT_NAME, "83R0"),
+		},
+		.driver_data = (void *)ghost_rt711,
 	},
 	{}
 };
