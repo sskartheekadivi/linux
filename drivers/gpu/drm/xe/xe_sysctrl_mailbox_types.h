@@ -47,9 +47,11 @@ enum xe_sysctrl_gfsp_cmd {
 /**
  * enum xe_sysctrl_core_cmd - Commands supported by Core group
  *
+ * @XE_SYSCTRL_CMD_LOOPBACK: Loopback test command
  * @XE_SYSCTRL_CMD_GET_APP_STATUS_BY_ID: Retrieve application status by ID
  */
 enum xe_sysctrl_core_cmd {
+	XE_SYSCTRL_CMD_LOOPBACK				= 0x03,
 	XE_SYSCTRL_CMD_GET_APP_STATUS_BY_ID		= 0x05,
 };
 
@@ -117,6 +119,9 @@ struct xe_sysctrl_mailbox_command {
 #define XE_SYSCTRL_MB_MAX_FRAMES	64
 #define XE_SYSCTRL_MB_MAX_MESSAGE_SIZE	\
 	(XE_SYSCTRL_MB_FRAME_SIZE * XE_SYSCTRL_MB_MAX_FRAMES)
+
+#define XE_SYSCTRL_MB_MAX_DATA_SIZE	\
+	(XE_SYSCTRL_MB_MAX_MESSAGE_SIZE - sizeof(u32))
 
 #define XE_SYSCTRL_MB_DEFAULT_TIMEOUT_MS	500
 
