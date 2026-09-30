@@ -155,5 +155,6 @@ struct xe_sysctrl_mailbox_command {
 	(XE_SYSCTRL_MB_MAX_MESSAGE_SIZE - sizeof(u32))
 
 #define XE_SYSCTRL_MB_DEFAULT_TIMEOUT_MS	500
+#define XE_SYSCTRL_MB_MAX_TIMEOUT_MS		60000
 
 #endif

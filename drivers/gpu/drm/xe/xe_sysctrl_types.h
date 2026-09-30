@@ -39,6 +39,9 @@ struct xe_sysctrl_debugfs_entry {
 
 	/** @status: Last command result */
 	int status;
+
+	/** @timeout_ms: Last mailbox response timeout used (0 for default) */
+	unsigned int timeout_ms;
 };
 
 /**
@@ -71,6 +74,9 @@ struct xe_sysctrl {
 
 		/** @debugfs.ras_error_inject: RAS error injection test entry */
 		struct xe_sysctrl_debugfs_entry ras_error_inject;
+
+		/** @debugfs.mailbox: Generic, user-parameterized mailbox entry */
+		struct xe_sysctrl_debugfs_entry mailbox;
 	} debugfs;
 };
 
