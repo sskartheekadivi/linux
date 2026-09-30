@@ -68,6 +68,9 @@ struct xe_sysctrl {
 
 		/** @debugfs.loopback: Loopback test entry */
 		struct xe_sysctrl_debugfs_entry loopback;
+
+		/** @debugfs.ras_error_inject: RAS error injection test entry */
+		struct xe_sysctrl_debugfs_entry ras_error_inject;
 	} debugfs;
 };
 

@@ -10,6 +10,7 @@
 #include <linux/seq_file.h>
 #include <linux/slab.h>
 #include <linux/string.h>
+#include <linux/string_choices.h>
 #include <linux/uaccess.h>
 
 #include "xe_pm.h"
@@ -134,6 +135,153 @@ static const struct file_operations xe_sysctrl_loopback_fops = {
 	.release = single_release,
 };
 
+static int sysctrl_parse_ras_error_inject(struct xe_device *xe, char *tmp,
+					  struct xe_sysctrl_diag_ras_err_inj_req *req)
+{
+	unsigned int nfields = 0;
+	char *token;
+	unsigned long val;
+
+	while ((token = strsep(&tmp, " \t\n")) != NULL) {
+		if (*token == '\0')
+			continue;
+
+		if (kstrtoul(token, 0, &val))
+			goto inval;
+
+		switch (nfields) {
+		case 0:
+			if (val > U16_MAX)
+				goto inval;
+			req->ras_block_id = val;
+			break;
+		case 1:
+			if (val > U16_MAX)
+				goto inval;
+			req->ras_sub_block_id = val;
+			break;
+		case 2:
+			if (val > U16_MAX)
+				goto inval;
+			req->err_type = val;
+			break;
+		case 3:
+			if (val > U32_MAX)
+				goto inval;
+			req->params = val;
+			break;
+		default:
+			xe_err(xe, "sysctrl: too many ras_error_inject arguments\n");
+			return -EINVAL;
+		}
+		nfields++;
+	}
+
+	if (nfields < 3) {
+		xe_err(xe,
+		       "sysctrl: usage: <ras_block_id> <ras_sub_block_id> <err_type> [params]\n");
+		return -EINVAL;
+	}
+
+	return 0;
+
+inval:
+	xe_err(xe, "sysctrl: invalid ras_error_inject token '%s'\n", token);
+	return -EINVAL;
+}
+
+static ssize_t xe_sysctrl_ras_error_inject_write(struct file *file, const char __user *ubuf,
+						 size_t len, loff_t *offp)
+{
+	char *kbuf __free(kfree) = NULL;
+	struct seq_file *m = file->private_data;
+	struct xe_sysctrl_debugfs_entry *entry = m->private;
+	struct xe_device *xe = sc_to_xe(entry->sc);
+	struct xe_sysctrl_diag_ras_err_inj_req req = {};
+	struct xe_sysctrl_mailbox_command cmd = {};
+	u8 resp_hdr_only[sizeof(u32)];
+	size_t out_len = 0;
+	int status;
+
+	if (*offp)
+		return -ESPIPE;
+
+	if (len == 0 || len >= PAGE_SIZE)
+		return -EINVAL;
+
+	kbuf = kmalloc(len + 1, GFP_KERNEL);
+	if (!kbuf)
+		return -ENOMEM;
+
+	if (copy_from_user(kbuf, ubuf, len))
+		return -EFAULT;
+	kbuf[len] = '\0';
+
+	status = sysctrl_parse_ras_error_inject(xe, kbuf, &req);
+	if (status)
+		return status;
+
+	xe_sysctrl_create_command(&cmd, entry->group, entry->command,
+				  &req, sizeof(req), resp_hdr_only,
+				  sizeof(resp_hdr_only));
+
+	scoped_guard(mutex, &entry->lock) {
+		guard(xe_pm_runtime)(xe);
+		status = xe_sysctrl_send_command(entry->sc, &cmd, &out_len);
+		entry->status = status;
+	}
+
+	return status ? status : len;
+}
+
+static int xe_sysctrl_ras_error_inject_show(struct seq_file *m, void *data)
+{
+	struct xe_sysctrl_debugfs_entry *entry = m->private;
+	struct xe_device *xe = sc_to_xe(entry->sc);
+	bool fw_ready;
+
+	scoped_guard(xe_pm_runtime, xe)
+		fw_ready = xe_sysctrl_is_diag_fw_ready(xe);
+
+	guard(mutex)(&entry->lock);
+
+	seq_printf(m, "Command: group=0x%02x cmd=0x%02x\n", entry->group, entry->command);
+	seq_printf(m, "Diag firmware ready: %s\n", str_yes_no(fw_ready));
+	seq_printf(m, "Status: %d (%s)\n", entry->status, entry->status ? "FAILED" : "SUCCESS");
+
+	seq_puts(m, "\nUsage:\n");
+	seq_puts(m, "  echo \"<ras_block_id> <ras_sub_block_id> <err_type> [params]\" > ras_error_inject\n");
+	seq_puts(m, "  cat ras_error_inject\n");
+
+	return 0;
+}
+
+static int xe_sysctrl_ras_error_inject_open(struct inode *inode, struct file *file)
+{
+	struct xe_sysctrl_debugfs_entry *entry = inode->i_private;
+	struct xe_device *xe = sc_to_xe(entry->sc);
+	bool fw_ready;
+
+	scoped_guard(xe_pm_runtime, xe)
+		fw_ready = xe_sysctrl_is_diag_fw_ready(xe);
+
+	if (!fw_ready) {
+		xe_err(xe, "sysctrl: diag firmware not ready, ras_error_inject unavailable\n");
+		return -ENODEV;
+	}
+
+	return single_open(file, xe_sysctrl_ras_error_inject_show, inode->i_private);
+}
+
+static const struct file_operations xe_sysctrl_ras_error_inject_fops = {
+	.owner = THIS_MODULE,
+	.open = xe_sysctrl_ras_error_inject_open,
+	.read = seq_read,
+	.write = xe_sysctrl_ras_error_inject_write,
+	.llseek = seq_lseek,
+	.release = single_release,
+};
+
 static void xe_sysctrl_register_entry(struct dentry *root, struct xe_sysctrl_debugfs_entry *entry,
 				      struct xe_sysctrl *sc, const char *name,
 				      u8 group, u8 command,
@@ -173,4 +321,8 @@ void xe_sysctrl_debugfs_register(struct xe_sysctrl *sc, struct dentry *parent)
 	xe_sysctrl_register_entry(root, &sc->debugfs.loopback, sc, "loopback",
 				  XE_SYSCTRL_GROUP_CORE, XE_SYSCTRL_CMD_LOOPBACK,
 				  &xe_sysctrl_loopback_fops);
+
+	xe_sysctrl_register_entry(root, &sc->debugfs.ras_error_inject, sc, "ras_error_inject",
+				  XE_SYSCTRL_GROUP_DIAG, XE_SYSCTRL_CMD_DIAG_RAS_ERR_INJECT,
+				  &xe_sysctrl_ras_error_inject_fops);
 }
