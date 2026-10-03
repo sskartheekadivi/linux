@@ -743,14 +743,6 @@ static const char * const nord_pciephy_port_abcd_reset_l[] = {
 	"port_a", "port_b", "port_c", "port_d",
 };
 
-static const char * const nord_pciephy_port_a_nocsr_reset_l[] = {
-	"port_a_nocsr",
-};
-
-static const char * const nord_pciephy_port_b_nocsr_reset_l[] = {
-	"port_b_nocsr",
-};
-
 static const char * const nord_pciephy_port_c_nocsr_reset_l[] = {
 	"port_c_nocsr",
 };
