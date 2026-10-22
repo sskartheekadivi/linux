@@ -134,6 +134,13 @@ properties:
               - ti,am642-sk
           - const: ti,am642
 
+      - description: K3 AM642 SoC SK-AM64B
+        items:
+          - enum:
+              - ti,am642-sk-am64b
+          - const: ti,am642-sk
+          - const: ti,am642
+
       - description: K3 AM642 SoC PHYTEC phyBOARD-Electra
         items:
           - const: phytec,am642-phyboard-electra-rdk

@@ -1,0 +1,48 @@
+// SPDX-License-Identifier: GPL-2.0-only OR MIT
+/*
+ * Copyright (C) 2024 Texas Instruments Incorporated - https://www.ti.com/
+ */
+
+/dts-v1/;
+
+#include <dt-bindings/gpio/gpio.h>
+
+#include "k3-am642.dtsi"
+#include "k3-am642-sk-common.dtsi"
+
+/ {
+	compatible = "ti,am642-sk-am64b", "ti,am642-sk", "ti,am642";
+	model = "Texas Instruments AM642 SK-AM64B";
+
+	memory@80000000 {
+		bootph-pre-ram;
+		device_type = "memory";
+		/* 2G RAM */
+		reg = <0x00000000 0x80000000 0x00000000 0x80000000>;
+	};
+};
+
+&main_pmx0 {
+	ospi0_rst_pins_default: ospi0-rst-default-pins {
+		pinctrl-single,pins = <
+			AM64X_IOPAD(0x0034, PIN_OUTPUT, 7) /* OSPI0_CSn2.GPIO0_13 */
+		>;
+	};
+
+	ospi0_int_pins_default: ospi0-int-default-pins {
+		pinctrl-single,pins = <
+			AM64X_IOPAD(0x0038, PIN_INPUT, 7) /* OSPI0_CSn3.GPIO0_14 */
+		>;
+	};
+};
+
+&ospi0 {
+	pinctrl-0 = <&ospi0_pins_default>, <&ospi0_rst_pins_default>,
+		    <&ospi0_int_pins_default>;
+
+	flash@0 {
+		reset-gpios = <&main_gpio0 13 GPIO_ACTIVE_LOW>;
+		interrupt-parent = <&main_gpio0>;
+		interrupts = <14 IRQ_TYPE_EDGE_FALLING>;
+	};
+};
