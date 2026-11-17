@@ -885,6 +885,14 @@ config SPI_RSPI
 	help
 	  SPI driver for Renesas RSPI and QSPI blocks.
 
+config SPI_RZV2H_RSPI
+	tristate "Renesas RZ/V2H RSPI controller"
+	depends on ARCH_RENESAS || COMPILE_TEST
+	help
+	  RSPI driver for the Renesas RZ/V2H Serial Peripheral Interface (RSPI).
+	  RSPI supports both SPI host and SPI target roles. This option only
+	  enables the SPI host role.
+
 config SPI_RZV2M_CSI
 	tristate "Renesas RZ/V2M CSI controller"
 	depends on ARCH_RENESAS || COMPILE_TEST
@@ -1087,10 +1095,10 @@ config SPI_TEGRA210_QUAD
 
 config SPI_TEGRA114
 	tristate "NVIDIA Tegra114 SPI Controller"
-	depends on (ARCH_TEGRA && TEGRA20_APB_DMA) || COMPILE_TEST
+	depends on ARCH_TEGRA || COMPILE_TEST
 	depends on RESET_CONTROLLER
 	help
-	  SPI driver for NVIDIA Tegra114 SPI Controller interface. This controller
+	  SPI controller driver for NVIDIA Tegra114 and later SoCs. This controller
 	  is different than the older SoCs SPI controller and also register interface
 	  get changed with this controller.
 

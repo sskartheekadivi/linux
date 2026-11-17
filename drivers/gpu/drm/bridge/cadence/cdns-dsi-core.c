@@ -1270,9 +1270,8 @@ static int cdns_dsi_resume(struct device *dev)
 }
 
 static const struct dev_pm_ops cdns_dsi_pm_ops = {
-      SET_RUNTIME_PM_OPS(cdns_dsi_runtime_suspend,
-                         cdns_dsi_runtime_resume, NULL)
-      SET_SYSTEM_SLEEP_PM_OPS(cdns_dsi_suspend, cdns_dsi_resume)
+	RUNTIME_PM_OPS(cdns_dsi_runtime_suspend, cdns_dsi_runtime_resume, NULL)
+	SYSTEM_SLEEP_PM_OPS(cdns_dsi_suspend, cdns_dsi_resume)
 };
 
 static int cdns_dsi_drm_probe(struct platform_device *pdev)
@@ -1421,7 +1420,7 @@ static struct platform_driver cdns_dsi_platform_driver = {
 	.driver = {
 		.name   = "cdns-dsi",
 		.of_match_table = cdns_dsi_of_match,
-		.pm = &cdns_dsi_pm_ops,
+		.pm = pm_ptr(&cdns_dsi_pm_ops),
 	},
 };
 module_platform_driver(cdns_dsi_platform_driver);

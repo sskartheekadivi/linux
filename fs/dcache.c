@@ -1377,6 +1377,8 @@ EXPORT_SYMBOL(path_has_submounts);
  *
  * Only one of d_invalidate() and d_set_mounted() must succeed.  For
  * this reason take rename_lock and d_lock on dentry and ancestors.
+ * Likewise for dont_mount() which marks a dentry that is being removed
+ * under d_lock.
  */
 int d_set_mounted(struct dentry *dentry)
 {
@@ -1393,7 +1395,7 @@ int d_set_mounted(struct dentry *dentry)
 		spin_unlock(&p->d_lock);
 	}
 	spin_lock(&dentry->d_lock);
-	if (!d_unlinked(dentry)) {
+	if (!d_unlinked(dentry) && !cant_mount(dentry)) {
 		ret = -EBUSY;
 		if (!d_mountpoint(dentry)) {
 			dentry->d_flags |= DCACHE_MOUNTED;
@@ -2664,52 +2666,6 @@ void d_add(struct dentry *entry, struct inode *inode)
 }
 EXPORT_SYMBOL(d_add);
 
-/**
- * d_exact_alias - find and hash an exact unhashed alias
- * @entry: dentry to add
- * @inode: The inode to go with this dentry
- *
- * If an unhashed dentry with the same name/parent and desired
- * inode already exists, hash and return it.  Otherwise, return
- * NULL.
- *
- * Parent directory should be locked.
- */
-struct dentry *d_exact_alias(struct dentry *entry, struct inode *inode)
-{
-	struct dentry *alias;
-	unsigned int hash = entry->d_name.hash;
-
-	spin_lock(&inode->i_lock);
-	hlist_for_each_entry(alias, &inode->i_dentry, d_u.d_alias) {
-		/*
-		 * Don't need alias->d_lock here, because aliases with
-		 * d_parent == entry->d_parent are not subject to name or
-		 * parent changes, because the parent inode i_mutex is held.
-		 */
-		if (alias->d_name.hash != hash)
-			continue;
-		if (alias->d_parent != entry->d_parent)
-			continue;
-		if (!d_same_name(alias, entry->d_parent, &entry->d_name))
-			continue;
-		spin_lock(&alias->d_lock);
-		if (!d_unhashed(alias)) {
-			spin_unlock(&alias->d_lock);
-			alias = NULL;
-		} else {
-			dget_dlock(alias);
-			__d_rehash(alias);
-			spin_unlock(&alias->d_lock);
-		}
-		spin_unlock(&inode->i_lock);
-		return alias;
-	}
-	spin_unlock(&inode->i_lock);
-	return NULL;
-}
-EXPORT_SYMBOL(d_exact_alias);
-
 static void swap_names(struct dentry *dentry, struct dentry *target)
 {
 	if (unlikely(dname_external(target))) {
@@ -3173,7 +3129,7 @@ static void __init dcache_init_early(void)
 					HASH_EARLY | HASH_ZERO,
 					&d_hash_shift,
 					NULL,
-					0,
+					2,
 					0);
 	d_hash_shift = 32 - d_hash_shift;
 
@@ -3204,7 +3160,7 @@ static void __init dcache_init(void)
 					HASH_ZERO,
 					&d_hash_shift,
 					NULL,
-					0,
+					2,
 					0);
 	d_hash_shift = 32 - d_hash_shift;
 

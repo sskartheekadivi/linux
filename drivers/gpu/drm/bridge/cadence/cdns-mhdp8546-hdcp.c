@@ -436,6 +436,10 @@ static int cdns_mhdp_hdcp_check_link(struct cdns_mhdp_device *mhdp)
 	int ret = 0;
 
 	mutex_lock(&mhdp->hdcp.mutex);
+
+	if (!mhdp->connector)
+		goto out;
+
 	if (mhdp->hdcp.value == DRM_MODE_CONTENT_PROTECTION_UNDESIRED)
 		goto out;
 
@@ -487,8 +491,14 @@ static void cdns_mhdp_hdcp_prop_work(struct work_struct *work)
 	struct cdns_mhdp_device *mhdp = container_of(hdcp,
 						     struct cdns_mhdp_device,
 						     hdcp);
-	struct drm_device *dev = mhdp->connector->dev;
+	struct drm_device *dev = NULL;
 	struct drm_connector_state *state;
+
+	if (mhdp->connector)
+		dev = mhdp->connector->dev;
+
+	if (!dev)
+		return;
 
 	drm_modeset_lock(&dev->mode_config.connection_mutex, NULL);
 	mutex_lock(&mhdp->hdcp.mutex);

@@ -6,6 +6,9 @@
 
 menu "Analog to digital converters"
 
+config IIO_ADC_HELPER
+	tristate
+
 config AB8500_GPADC
 	bool "ST-Ericsson AB8500 GPADC driver"
 	depends on AB8500_CORE && REGULATOR_AB8500
@@ -188,6 +191,7 @@ config AD7298
 config AD7380
 	tristate "Analog Devices AD7380 ADC driver"
 	depends on SPI_MASTER
+	select REGMAP
 	select IIO_BUFFER
 	select IIO_TRIGGER
 	select IIO_TRIGGERED_BUFFER
@@ -840,6 +844,7 @@ config MAX1363
 config MAX34408
 	tristate "Maxim max34408/max344089 ADC driver"
 	depends on I2C
+	select REGMAP_I2C
 	help
 	  Say yes here to build support for Maxim max34408/max34409 current sense
 	  monitor with 8-bits ADC interface with overcurrent delay/threshold and
@@ -1185,6 +1190,17 @@ config RZG2L_ADC
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called rzg2l_adc.
+
+config RZT2H_ADC
+	tristate "Renesas RZ/T2H / RZ/N2H ADC driver"
+	depends on ARCH_RENESAS || COMPILE_TEST
+	select IIO_ADC_HELPER
+	help
+	  Say yes here to build support for the ADC found in Renesas
+	  RZ/T2H / RZ/N2H SoCs.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called rzt2h_adc.
 
 config SC27XX_ADC
 	tristate "Spreadtrum SC27xx series PMICs ADC"
